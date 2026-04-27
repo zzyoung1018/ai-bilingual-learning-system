@@ -99,6 +99,12 @@ const UI_TEXT = {
       "Paste lesson text here, or upload a PDF / DOCX and edit extracted content.",
     generateAiLearningSupport: "Generate AI Learning Support",
     generatingAiLearningSupport: "Generating AI Learning Support...",
+    translationProgress: "Translation progress",
+    preparingTranslation: "Preparing translation...",
+    translatingBatchProgress: (current, total) => `Translating batch ${current}/${total}`,
+    retryingIncompleteBlocksProgress: "Retrying incomplete blocks...",
+    generatingGlossaryQuiz: "Generating glossary and quiz...",
+    progressComplete: "Complete",
     exportTranslatedDocxRecommended: "Export Translated DOCX (Recommended)",
     exportLearningPackageTeacherJson: "Export Learning Package (Teacher JSON)",
     exportLearningPackageStudentJson: "Export Learning Package (Student JSON)",
@@ -317,6 +323,14 @@ const UI_TEXT = {
       "Сабақ мәтінін осы жерге қойыңыз немесе PDF / DOCX жүктеп, алынған мазмұнды өңдеңіз.",
     generateAiLearningSupport: "AI оқу қолдауын жасау",
     generatingAiLearningSupport: "AI оқу қолдауы жасалып жатыр...",
+    translationProgress: "Аударма барысы",
+    preparingTranslation: "Аударма дайындалып жатыр...",
+    translatingBatchProgress: (current, total) =>
+      `Пакет аударылып жатыр: ${current}/${total}`,
+    retryingIncompleteBlocksProgress:
+      "Толық аударылмаған блоктар қайта өңделіп жатыр...",
+    generatingGlossaryQuiz: "Глоссарий мен тест жасалып жатыр...",
+    progressComplete: "Аяқталды",
     exportTranslatedDocxRecommended: "Аударылған DOCX файлын экспорттау (ұсынылады)",
     exportLearningPackageTeacherJson:
       "Сабақ пакетін экспорттау (мұғалім JSON)",
@@ -495,6 +509,15 @@ const defaultQuizSettings = {
   includeExplanations: false,
 };
 
+const defaultGenerationProgress = {
+  active: false,
+  stage: "idle",
+  current: 0,
+  total: 0,
+  percent: 0,
+  label: "",
+};
+
 const DOCX_TRANSLATION_BATCH_MAX_BLOCKS = 6;
 const DOCX_TRANSLATION_BATCH_MAX_CHARS = 1800;
 const OLLAMA_CONFIG = {
@@ -573,6 +596,23 @@ function getDocumentSourceLabel(value, uiLanguage) {
   if (value === "pdf") return text.sourceTypePdf;
   if (value === "docx") return text.sourceTypeDocx;
   return text.sourceTypeText;
+}
+
+function clampPercent(value) {
+  const next = Number(value);
+  if (Number.isNaN(next)) return 0;
+  return Math.max(0, Math.min(100, Math.round(next)));
+}
+
+function buildProgressUpdate({ stage, current = 0, total = 0, percent = 0, label = "" }) {
+  return {
+    active: true,
+    stage,
+    current,
+    total,
+    percent: clampPercent(percent),
+    label,
+  };
 }
 
 function getTargetLanguageConfig(targetLanguage) {
@@ -775,21 +815,25 @@ function extractJsonPayload(content) {
   }
 }
 
-async function callOllamaChat(messages, { think, options }) {
+async function callOllamaChat(messages, { think, options, format }) {
   const t = getRuntimeUiText();
   let response;
+  const requestBody = {
+    model: OLLAMA_CONFIG.model,
+    messages,
+    stream: false,
+    think,
+    keep_alive: OLLAMA_CONFIG.keepAlive,
+    options,
+  };
+  if (format) {
+    requestBody.format = format;
+  }
   try {
     response = await fetch(`${OLLAMA_CONFIG.baseUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OLLAMA_CONFIG.model,
-        messages,
-        stream: false,
-        think,
-        keep_alive: OLLAMA_CONFIG.keepAlive,
-        options,
-      }),
+      body: JSON.stringify(requestBody),
     });
   } catch (err) {
     throw new Error(t.ollamaConnectionFailed(err?.message || ""));
@@ -829,6 +873,7 @@ function buildLessonEnrichmentMessages({
       content:
         "You are an assistant for an AI-supported bilingual education product. " +
         "Return ONLY strict JSON. Do not include markdown, comments, or explanatory text outside JSON. " +
+        "No trailing commas. All strings must be properly quoted. Arrays must use commas between elements. " +
         "Use this exact top-level schema: " +
         '{"glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"meta":{}}. ' +
         "This is the teaching-support generation stage, not the translation stage. Do not include a translation field and do not retranslate or rewrite the completed translation. " +
@@ -845,7 +890,26 @@ function buildLessonEnrichmentMessages({
         `Learning mode: ${mode}\n` +
         `${modeHint}\n` +
         `Quiz settings:\n${JSON.stringify(quizSettings, null, 2)}\n\n` +
-        "Generate only glossary, simplifiedExplanation, and quiz as strict JSON. Do not include translation in the response.",
+        "Generate only glossary, simplifiedExplanation, quiz, and optional meta as valid strict JSON. Do not include translation in the response. Do not use markdown, comments, trailing commas, or unquoted strings.",
+    },
+  ];
+}
+
+function buildEnrichmentJsonRepairMessages(malformedJson) {
+  return [
+    {
+      role: "system",
+      content:
+        "You repair malformed JSON for an education app. Return ONLY valid strict JSON. " +
+        "Do not use markdown, comments, or explanatory text. Do not add a translation field. " +
+        "No trailing commas. All strings must be properly quoted. Arrays must use commas between elements. " +
+        "Preserve the semantic content if possible. The allowed top-level fields are glossary, simplifiedExplanation, quiz, and meta.",
+    },
+    {
+      role: "user",
+      content:
+        "Repair this malformed JSON into valid strict JSON only:\n\n" +
+        String(malformedJson || ""),
     },
   ];
 }
@@ -855,27 +919,58 @@ function isEmptyOllamaOutputError(err) {
   return message === getRuntimeUiText().ollamaEmptyResponse;
 }
 
+function warnEnrichmentParseFailure(label, err) {
+  if (typeof console !== "undefined") {
+    console.warn(`[Ollama enrichment] ${label}`, err);
+  }
+}
+
 async function generateTeachingSupportWithOllama(fallbackInput, translation) {
   const messages = buildLessonEnrichmentMessages({
     ...fallbackInput,
     translation,
   });
   let parsed;
+  let malformedContent = "";
   try {
     const content = await callOllamaChat(messages, {
       think: true,
       options: OLLAMA_ENRICHMENT_OPTIONS,
+      format: "json",
     });
+    malformedContent = content;
     parsed = extractJsonPayload(content);
   } catch (err) {
-    if (!isEmptyOllamaOutputError(err)) {
-      throw err;
+    warnEnrichmentParseFailure("think:true output could not be parsed; retrying with think:false.", err);
+    try {
+      const retryContent = await callOllamaChat(messages, {
+        think: false,
+        options: OLLAMA_ENRICHMENT_OPTIONS,
+        format: "json",
+      });
+      malformedContent = retryContent;
+      parsed = extractJsonPayload(retryContent);
+    } catch (retryErr) {
+      warnEnrichmentParseFailure("think:false output could not be parsed; trying JSON repair.", retryErr);
+      if (typeof console !== "undefined") {
+        console.warn("[Ollama enrichment] JSON repair retry is being used.");
+      }
+      if (!malformedContent && isEmptyOllamaOutputError(err)) {
+        malformedContent = "";
+      }
+      if (!malformedContent) {
+        throw retryErr;
+      }
+      const repairedContent = await callOllamaChat(
+        buildEnrichmentJsonRepairMessages(malformedContent),
+        {
+          think: false,
+          options: OLLAMA_ENRICHMENT_OPTIONS,
+          format: "json",
+        }
+      );
+      parsed = extractJsonPayload(repairedContent);
     }
-    const retryContent = await callOllamaChat(messages, {
-      think: false,
-      options: OLLAMA_ENRICHMENT_OPTIONS,
-    });
-    parsed = extractJsonPayload(retryContent);
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -1876,6 +1971,39 @@ function LessonResults(props) {
   `;
 }
 
+function GenerationProgress(props) {
+  const { progress, t } = props;
+  if (!progress?.active) return null;
+  const percent = clampPercent(progress.percent);
+  const isIndeterminate = progress.stage !== "done" && progress.total <= 0;
+  const label = progress.label || t.preparingTranslation;
+
+  return html`
+    <div className="generationProgress" role="status" aria-live="polite">
+      <div className="generationProgress__meta">
+        <span>${t.translationProgress}</span>
+        <strong>${label}</strong>
+        <span>${percent}%</span>
+      </div>
+      <div
+        className=${isIndeterminate
+          ? "generationProgress__track generationProgress__track--indeterminate"
+          : "generationProgress__track"}
+        aria-label=${t.translationProgress}
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow=${percent}
+        role="progressbar"
+      >
+        <div
+          className="generationProgress__bar"
+          style=${{ width: `${isIndeterminate ? 35 : percent}%` }}
+        ></div>
+      </div>
+    </div>
+  `;
+}
+
 function TeacherWorkspace(props) {
   const {
     lessonTitle,
@@ -1908,6 +2036,7 @@ function TeacherWorkspace(props) {
     onTeacherQuizAnswer,
     statusMessage,
     statusType,
+    generationProgress,
     t,
     uiLanguage,
   } = props;
@@ -2012,6 +2141,8 @@ function TeacherWorkspace(props) {
           ${loading ? t.generatingAiLearningSupport : t.generateAiLearningSupport}
         </button>
       </div>
+
+      <${GenerationProgress} progress=${generationProgress} t=${t} />
 
       ${lesson &&
       html`
@@ -2222,6 +2353,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(t.teacherTip);
   const [statusType, setStatusType] = useState("info");
+  const [generationProgress, setGenerationProgress] = useState(defaultGenerationProgress);
 
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentStatus, setDocumentStatus] = useState("");
@@ -2273,6 +2405,19 @@ function App() {
 
   function toggleUiLanguage() {
     setUiLanguage((prev) => (prev === "en" ? "kk" : "en"));
+  }
+
+  function updateGenerationProgress(next) {
+    setGenerationProgress(buildProgressUpdate(next));
+  }
+
+  function markGenerationProgressError() {
+    setGenerationProgress((prev) => ({
+      ...prev,
+      active: true,
+      stage: "error",
+      label: prev.label || t.preparingTranslation,
+    }));
   }
 
   function handleModeChange(nextMode) {
@@ -2409,6 +2554,13 @@ function App() {
     if (retryIds.size > 0) {
       setStatusType("info");
       setStatusMessage(t.retryingIncompleteBlocks(retryIds.size));
+      updateGenerationProgress({
+        stage: "retry",
+        current: 0,
+        total: retryIds.size,
+        percent: 75,
+        label: t.retryingIncompleteBlocksProgress,
+      });
       result.meta.reason = mergeReasonList([
         result.meta.reason,
         result.meta.itemCountMismatch ? "translation_item_count_mismatch" : "",
@@ -2420,9 +2572,18 @@ function App() {
         preservedAfterRetry: 0,
       };
       const unresolvedSuspiciousBlocks = [];
+      let retryIndex = 0;
 
       for (const block of blocks) {
         if (!retryIds.has(String(block.id || ""))) continue;
+        retryIndex += 1;
+        updateGenerationProgress({
+          stage: "retry",
+          current: retryIndex,
+          total: retryIds.size,
+          percent: 75 + (retryIndex / retryIds.size) * 10,
+          label: t.retryingIncompleteBlocksProgress,
+        });
         try {
           const retryResult = await translateBlocksWithOllama({
             ...requestPayload,
@@ -2516,6 +2677,13 @@ function App() {
       const batchBlocks = batch.items.map((item) => item.block);
       setStatusType("info");
       setStatusMessage(t.docxTranslationBatchProgress(batchIndex + 1, batches.length));
+      updateGenerationProgress({
+        stage: "translation",
+        current: batchIndex + 1,
+        total: batches.length,
+        percent: ((batchIndex + 1) / batches.length) * 75,
+        label: t.translatingBatchProgress(batchIndex + 1, batches.length),
+      });
 
       if (typeof console !== "undefined") {
         console.info(
@@ -2684,6 +2852,13 @@ function App() {
     setLoading(true);
     setStatusType("info");
     setStatusMessage(t.generatingLessonSupport);
+    updateGenerationProgress({
+      stage: "translation",
+      current: 0,
+      total: 0,
+      percent: 2,
+      label: t.preparingTranslation,
+    });
     setTeacherQuizAnswers({});
 
     const fallbackInput = {
@@ -2719,6 +2894,13 @@ function App() {
         try {
           setStatusType("info");
           setStatusMessage(t.generatingTeachingSupport);
+          updateGenerationProgress({
+            stage: "enrichment",
+            current: 1,
+            total: 1,
+            percent: 88,
+            label: t.generatingGlossaryQuiz,
+          });
           const aiPayload = await generateTeachingSupportWithOllama(
             fallbackInput,
             combinedTranslation
@@ -2773,9 +2955,17 @@ function App() {
         if (usedFallback) {
           setStatusType("error");
           setStatusMessage(t.docxGenerationFallbackUsed(fallbackReason));
+          markGenerationProgressError();
         } else {
           setStatusType("info");
           setStatusMessage(t.docxBatchCompleted(summary));
+          updateGenerationProgress({
+            stage: "done",
+            current: 1,
+            total: 1,
+            percent: 100,
+            label: t.progressComplete,
+          });
         }
       } catch (docxErr) {
         const fallback = createLocalFallbackLesson(fallbackInput);
@@ -2796,6 +2986,7 @@ function App() {
         setTeacherMeta({ usedFallback: true, reason: docxErr?.message || t.docxBlockFailure });
         setStatusType("error");
         setStatusMessage(t.docxBatchedTranslationFailed(docxErr?.message || ""));
+        markGenerationProgressError();
       } finally {
         setLoading(false);
       }
@@ -2818,11 +3009,25 @@ function App() {
       if (!Array.isArray(translationBlocks) || translationBlocks.length === 0) {
         throw new Error(t.noTranslationChunks);
       }
+      updateGenerationProgress({
+        stage: "translation",
+        current: Math.min(1, translationBlocks.length),
+        total: translationBlocks.length,
+        percent: 10,
+        label: t.translatingBatchProgress(Math.min(1, translationBlocks.length), translationBlocks.length),
+      });
 
       const translationResult = await translateBlocksForDocument(
         translationBlocks,
         documentContext.sourceType === "pdf"
       );
+      updateGenerationProgress({
+        stage: "translation",
+        current: translationBlocks.length,
+        total: translationBlocks.length,
+        percent: 75,
+        label: t.translatingBatchProgress(translationBlocks.length, translationBlocks.length),
+      });
       const completedTranslation = buildDocxCombinedTranslation(
         translationBlocks,
         translationResult.translationsById
@@ -2830,6 +3035,13 @@ function App() {
 
       setStatusType("info");
       setStatusMessage(t.generatingTeachingSupport);
+      updateGenerationProgress({
+        stage: "enrichment",
+        current: 1,
+        total: 1,
+        percent: 88,
+        label: t.generatingGlossaryQuiz,
+      });
       let lessonBase;
       let lessonMeta = { usedFallback: false, reason: "" };
       try {
@@ -2883,9 +3095,17 @@ function App() {
         setStatusMessage(
           t.localOllamaFallbackUsed(lessonMeta.reason || "", documentMeta.reason || "")
         );
+        markGenerationProgressError();
       } else {
         setStatusType("info");
         setStatusMessage(t.aiLearningSupportGenerated(documentMessage));
+        updateGenerationProgress({
+          stage: "done",
+          current: 1,
+          total: 1,
+          percent: 100,
+          label: t.progressComplete,
+        });
       }
     } catch (err) {
       const fallback = createLocalFallbackLesson(fallbackInput);
@@ -2907,6 +3127,7 @@ function App() {
       );
       setStatusType("error");
       setStatusMessage(t.couldNotReachLocalOllama(err?.message || ""));
+      markGenerationProgressError();
     } finally {
       setLoading(false);
     }
@@ -3119,6 +3340,7 @@ function App() {
             onTeacherQuizAnswer=${handleTeacherQuizAnswer}
             statusMessage=${statusMessage}
             statusType=${statusType}
+            generationProgress=${generationProgress}
             t=${t}
             uiLanguage=${uiLanguage}
           />

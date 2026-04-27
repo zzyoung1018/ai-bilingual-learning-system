@@ -419,10 +419,69 @@ select {
   border: 1px solid #b5daf0;
 }
 
+.generationProgress {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fcff;
+  padding: 12px;
+  margin: 0 0 16px;
+}
+
+.generationProgress__meta {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.generationProgress__meta strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.generationProgress__track {
+  position: relative;
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: #dcecf8;
+  margin-top: 9px;
+}
+
+.generationProgress__bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand), var(--brand-2));
+  transition: width 220ms ease;
+}
+
+.generationProgress__track--indeterminate .generationProgress__bar {
+  animation: progressSweep 1.2s ease-in-out infinite;
+}
+
+@keyframes progressSweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
 @media (max-width: 800px) {
   .uploadGrid,
   .resultsGrid,
   .settingsGrid {
     grid-template-columns: 1fr;
+  }
+
+  .generationProgress__meta {
+    grid-template-columns: 1fr auto;
+  }
+
+  .generationProgress__meta span:first-child {
+    grid-column: 1 / -1;
   }
 }
