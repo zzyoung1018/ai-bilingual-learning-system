@@ -20,25 +20,471 @@ import {
 
 const html = htm.bind(React.createElement);
 
-// Main navigation preserves the existing app structure, now with clear teacher/student areas.
+const UI_LANGUAGE_STORAGE_KEY = "uiLanguage";
+const UI_TEXT = {
+  en: {
+    navOverview: "Overview",
+    navTeacherWorkspace: "Teacher Workspace",
+    navStudentWorkspace: "Student Workspace",
+    brand: "AI-Supported Bilingual Education Tool",
+    headerTitle: "Classroom Lesson Builder and Student Practice Demo",
+    headerDescription:
+      "A practical prototype for preparing bilingual lesson support packages and delivering student-ready learning content with glossary, explanation, and quiz practice.",
+    teacherMode: "Teacher Mode",
+    studentMode: "Student Mode",
+    activeGuidanceMode: "Active guidance mode:",
+    teacherPreparation: "Teacher Preparation",
+    studentLearning: "Student Learning",
+    productOverview: "Product Overview",
+    homeDescription:
+      "This demo focuses on a reliable DOCX-first teaching workflow: teachers prepare structured translated materials, then students import and practice with guided learning content.",
+    featureDocxPdf: "Paste text quickly, upload DOCX (recommended), or upload PDF (experimental).",
+    featureDocxWorkflow:
+      "DOCX workflow preserves headings, paragraphs, lists, and tables where practical.",
+    featureGeneration:
+      "Generate translation, glossary, simplified explanation, and configurable quiz.",
+    featureExport:
+      "Export translated DOCX (recommended), learning package JSON, and optional PDF outputs.",
+    featureOverlay:
+      "Overlay PDF export remains available for testing, but may be unstable on complex layouts.",
+    featureImport:
+      "Import prepared packages on the Student side for direct learning practice.",
+    openTeacherWorkspace: "Open Teacher Workspace",
+    openStudentWorkspace: "Open Student Workspace",
+    quizSettings: "Quiz Settings",
+    quizSettingsDescription:
+      "Configure quiz complexity and response behavior for your lesson package.",
+    numberOfQuestions: "Number of questions",
+    difficultyLevel: "Difficulty level",
+    easy: "Easy",
+    medium: "Medium",
+    hard: "Hard",
+    questionTypes: "Question types",
+    multipleChoice: "Multiple Choice",
+    trueFalse: "True / False",
+    shortAnswer: "Short Answer",
+    includeAnswerKey: "Include answer key in Teacher view",
+    includeExplanations: "Include answer explanations",
+    generatedLessonPackage: "Generated Lesson Package",
+    reviewAdjustContent: "Review and adjust content before exporting for teacher or student use.",
+    translatedLessonText: "Translated Lesson Text",
+    editableTranslationPreview: "Editable translation preview.",
+    glossaryAndKeyTerms: "Glossary and Key Terms",
+    coreTermsForUnderstanding: "Core terms for bilingual understanding.",
+    simplifiedExplanation: "Simplified Explanation",
+    editableExplanation: "Editable explanation adapted to mode.",
+    quizPreview: "Quiz Preview",
+    practiceViewDescription: "Practice view with current quiz settings applied.",
+    writeShortAnswer: "Write your short answer...",
+    answerLabel: "Answer:",
+    whyLabel: "Why:",
+    notAvailable: "N/A",
+    practiceScore: "Practice score",
+    teacherLessonPreparation: "Teacher Lesson Preparation",
+    teacherPreparationDescription:
+      "Prepare a bilingual lesson package by using manual text, PDF upload, or DOCX upload, then generate AI-supported translation and learning materials.",
+    lessonInputAndDocumentProcessing: "Lesson Input and Document Processing",
+    lessonTitle: "Lesson title",
+    lessonTitlePlaceholder: "Example: Photosynthesis Introduction",
+    targetLanguage: "Target language",
+    guidanceMode: "Guidance mode",
+    uploadDocxRecommended: "Upload DOCX (Recommended)",
+    uploadPdfExperimental: "Upload PDF (Experimental)",
+    pasteTextInput: "Paste Text Input",
+    processingUploadedDocument: "Processing uploaded document...",
+    pdfExperimentalWarning:
+      "Experimental PDF overlay mode: complex layouts and tables may not align perfectly yet.",
+    sourceTextPreviewEditable: "Source text preview (editable)",
+    sourceTextPlaceholder:
+      "Paste lesson text here, or upload a PDF / DOCX and edit extracted content.",
+    generateAiLearningSupport: "Generate AI Learning Support",
+    generatingAiLearningSupport: "Generating AI Learning Support...",
+    exportTranslatedDocxRecommended: "Export Translated DOCX (Recommended)",
+    exportLearningPackageTeacherJson: "Export Learning Package (Teacher JSON)",
+    exportLearningPackageStudentJson: "Export Learning Package (Student JSON)",
+    exportTeacherHandoutPdf: "Export Teacher Handout (PDF)",
+    exportStudentHandoutPdf: "Export Student Handout (PDF)",
+    exportLayoutPreservingPdfExperimental: "Export Layout-Preserving PDF (Experimental)",
+    studentLearningWorkspace: "Student Learning Workspace",
+    studentWorkspaceDescription:
+      "Import a teacher-prepared lesson package and complete the guided bilingual learning activities.",
+    importLessonPackage: "Import Lesson Package",
+    importLessonPackageDescription:
+      "Choose a JSON package exported from Teacher Workspace.",
+    loadLatestTeacherDraft: "Load Latest Teacher Draft",
+    packageType: "Package type",
+    sourceType: "Source type",
+    sourceTypeText: "Text",
+    sourceTypePdf: "PDF",
+    sourceTypeDocx: "DOCX",
+    glossary: "Glossary",
+    practiceQuiz: "Practice Quiz",
+    writeYourAnswer: "Write your answer...",
+    checkQuiz: "Check Quiz",
+    score: "Score",
+    packageTypeTeacher: "Teacher",
+    packageTypeStudent: "Student",
+    languageToggleEnglish: "English",
+    languageToggleKazakh: "Қазақша",
+    untitledLesson: "Untitled Lesson",
+    targetLanguageLabels: {
+      English: "English",
+      Chinese: "Chinese",
+      Russian: "Russian",
+      Kazakh: "Kazakh",
+      Spanish: "Spanish",
+      French: "French",
+      Arabic: "Arabic",
+      Hindi: "Hindi",
+      Swahili: "Swahili",
+      German: "German",
+      Indonesian: "Indonesian",
+      Korean: "Korean",
+      Japanese: "Japanese",
+    },
+    quizTypeLabels: {
+      multiple_choice: "Multiple Choice",
+      true_false: "True / False",
+      short_answer: "Short Answer",
+    },
+    teacherTip:
+      "Teacher tip: configure quiz settings first, then generate AI learning support.",
+    recommendedWorkflow:
+      "Recommended workflow: Upload DOCX for best structure quality. PDF overlay is experimental.",
+    manualTextModeIsActive: "Manual text mode is active.",
+    manualTextModeSummary:
+      "Manual text mode: type or paste content directly. For structured documents, DOCX is recommended.",
+    pleaseUploadDocx: "Please upload a .docx file for the recommended DOCX workflow.",
+    pleaseUploadPdf: "Please upload a .pdf file for experimental overlay mode.",
+    pdfParsed: (fileName, pageCount) => `PDF parsed: ${fileName} (${pageCount} page(s))`,
+    pdfExperimentalSummary:
+      "PDF experimental mode: overlay export preserves visuals approximately, but complex tables may drift.",
+    docxParsed: (fileName, totalBlocks) =>
+      `DOCX parsed: ${fileName} (${totalBlocks} text blocks found)`,
+    docxExtractionAudit: (quick) =>
+      `DOCX extraction audit: paragraphs=${quick.paragraph}, headings=${quick.heading}, lists=${quick.listItem}, tableCells=${quick.tableCell}, textBoxes=${quick.textBox}, shapeText=${quick.drawingText}, headerFooter=${quick.headerFooter}, skipped=${quick.skipped}.`,
+    unsupportedFileType: "Unsupported file type. Please upload .pdf or .docx.",
+    documentProcessingFailed: "Document processing failed.",
+    pleaseEnterLessonText:
+      "Please enter lesson text or upload a PDF / DOCX before generating.",
+    generatingLessonSupport: "Generating AI learning support package...",
+    docxBatchedMode:
+      "DOCX batched mode: translating structured DOCX blocks in smaller requests. Preview text is display/debug only.",
+    generatingTeachingSupport:
+      "Stage 2/2: Generating glossary, explanation, and quiz with local Ollama...",
+    noStructuredDocxBlocks: "No structured DOCX blocks were found for translation.",
+    docxGenerationFallbackUsed: (reason) =>
+      `DOCX generation fallback used. ${reason || "Local Ollama DOCX generation did not fully complete."}`,
+    docxBatchCompleted: (summary) =>
+      `DOCX block translation completed in batches. translated=${summary.translated ?? "?"}, preserved=${summary.preserved ?? "?"}, unchanged=${summary.unchangedAfterTranslate ?? "?"}.`,
+    docxBatchedTranslationFailed: (reason) =>
+      `DOCX batched translation failed. Local fallback loaded. ${reason || ""}`.trim(),
+    docxTranslationBatchProgress: (batch, total) =>
+      `Stage 1/2: Translating document... Batch ${batch}/${total}`,
+    docxRetryModeProgress: (block, blockTotal, batch, batchTotal) =>
+      `Retrying incomplete blocks... Block ${block}/${blockTotal} in batch ${batch}/${batchTotal}`,
+    retryingIncompleteBlocks: (count) =>
+      `Retrying incomplete blocks... ${count} block(s) need a stricter translation pass.`,
+    translatingLessonContent: "Stage 1/2: Translating document with local Ollama...",
+    noTranslationChunks: "No translation chunks were available.",
+    experimentalPdfOverlayTranslated:
+      " Experimental PDF overlay blocks translated. Verify complex layouts/tables manually.",
+    localOllamaFallbackUsed: (lessonReason, documentReason) =>
+      `Local Ollama fallback used for stability. ${lessonReason || ""} ${documentReason || ""}`.trim(),
+    aiLearningSupportGenerated: (documentMessage) =>
+      `AI learning support package generated successfully.${documentMessage || ""}`,
+    couldNotReachLocalOllama: (reason) =>
+      `Could not reach local Ollama. Local fallback content loaded. ${reason || ""}`.trim(),
+    teacherJsonExported: "Teacher JSON package exported.",
+    studentJsonExported: "Student JSON package exported.",
+    teacherPdfExported: "Teacher PDF exported.",
+    studentPdfExported: "Student PDF exported.",
+    pdfExportFailed: "PDF export failed.",
+    overlayPdfRequiresSource:
+      "Overlay PDF export requires an uploaded PDF source document.",
+    overlayPdfExported:
+      "Experimental overlay PDF exported. Verify complex tables manually.",
+    overlayPdfExportFailed: "Overlay PDF export failed.",
+    translatedDocxExported: "Translated DOCX exported (recommended output).",
+    docxExportFailed: "DOCX export failed.",
+    importingLessonPackage: "Importing lesson package...",
+    importedLessonPackage: (lessonTitle) => `Imported lesson package: ${lessonTitle}`,
+    importLessonPackageFailed: "Could not import lesson package.",
+    noTeacherLessonAvailable:
+      "No teacher lesson is available yet. Generate a lesson first.",
+    loadedLatestTeacherDraft:
+      "Loaded latest teacher draft into Student Workspace.",
+    localFallbackLessonGenerated: "Local fallback lesson generated.",
+    localFallbackUsedReason: "Local fallback used.",
+    lessonSupportFailed: "Local Ollama lesson support failed.",
+    docxBlockFailure: "DOCX block failure.",
+    unknownBatchError: "Unknown batch error.",
+    unknownBlockError: "Unknown block error.",
+    docxBatchReason: (batch, total, reason) =>
+      `Batch ${batch}/${total}: ${reason}`,
+    docxBatchFailedReason: (batch, total, reason) =>
+      `Batch ${batch}/${total} failed: ${reason}`,
+    docxBatchBlockReason: (batch, total, block, blockTotal, reason) =>
+      `Batch ${batch}/${total} block ${block}/${blockTotal}: ${reason}`,
+    docxBatchBlockFailedReason: (batch, total, block, blockTotal, reason) =>
+      `Batch ${batch}/${total} block ${block}/${blockTotal} failed: ${reason}`,
+    ollamaEmptyResponse: "Ollama returned an empty response.",
+    ollamaNoJson: "Ollama response did not contain JSON.",
+    ollamaInvalidJson: "Ollama returned invalid response JSON.",
+    ollamaNoContent: "Ollama response did not include message.content.",
+    ollamaConnectionFailed: (reason) =>
+      `Could not connect to local Ollama at ${OLLAMA_CONFIG.baseUrl}. ${reason || ""}`.trim(),
+    ollamaHttpError: (status, body) =>
+      `Ollama HTTP ${status}: ${body || ""}`.trim(),
+  },
+  kk: {
+    navOverview: "Шолу",
+    navTeacherWorkspace: "Мұғалімнің жұмыс аймағы",
+    navStudentWorkspace: "Оқушының жұмыс аймағы",
+    brand: "AI қолдайтын екітілді білім беру құралы",
+    headerTitle: "Сабақ құрастыру және оқушы тәжірибесіне арналған демо",
+    headerDescription:
+      "Глоссарий, түсіндірме және тест арқылы сабаққа қолдау пакеттерін дайындауға және оқушыға дайын оқу мазмұнын ұсынуға арналған практикалық прототип.",
+    teacherMode: "Мұғалім режимі",
+    studentMode: "Оқушы режимі",
+    activeGuidanceMode: "Белсенді нұсқаулық режимі:",
+    teacherPreparation: "Мұғалімге дайындық",
+    studentLearning: "Оқушының оқуы",
+    productOverview: "Өнімге шолу",
+    homeDescription:
+      "Бұл демо сенімді DOCX-негізді мұғалім жұмыс үдерісіне бағытталған: мұғалімдер құрылымды аударылған материал дайындайды, ал оқушылар оны импорттап, бағытталған оқу мазмұнымен жұмыс істейді.",
+    featureDocxPdf:
+      "Мәтінді тез енгізіңіз, DOCX жүктеңіз (ұсынылады) немесе PDF жүктеңіз (эксперименттік).",
+    featureDocxWorkflow:
+      "DOCX жұмыс үдерісі мүмкіндігінше тақырыптарды, абзацтарды, тізімдерді және кестелерді сақтайды.",
+    featureGeneration:
+      "Аударма, глоссарий, жеңілдетілген түсіндірме және бапталатын тест жасауға болады.",
+    featureExport:
+      "Аударылған DOCX файлын (ұсынылады), сабақ пакетінің JSON нұсқасын және қосымша PDF нәтижелерін экспорттауға болады.",
+    featureOverlay:
+      "PDF қабаттастырылған экспорты тестілеу үшін қолжетімді, бірақ күрделі макеттерде тұрақсыз болуы мүмкін.",
+    featureImport:
+      "Дайындалған пакеттерді оқушы жағында импорттап, тікелей оқу жаттығуларын орындауға болады.",
+    openTeacherWorkspace: "Мұғалімнің жұмыс аймағын ашу",
+    openStudentWorkspace: "Оқушының жұмыс аймағын ашу",
+    quizSettings: "Тест параметрлері",
+    quizSettingsDescription:
+      "Сабақ пакетіңіз үшін тесттің күрделілігі мен жауап беру тәртібін баптаңыз.",
+    numberOfQuestions: "Сұрақтар саны",
+    difficultyLevel: "Қиындық деңгейі",
+    easy: "Оңай",
+    medium: "Орташа",
+    hard: "Қиын",
+    questionTypes: "Сұрақ түрлері",
+    multipleChoice: "Бірнеше жауап нұсқасы",
+    trueFalse: "Дұрыс / Бұрыс",
+    shortAnswer: "Қысқа жауап",
+    includeAnswerKey: "Мұғалім көрінісіне жауап кілтін қосу",
+    includeExplanations: "Жауап түсіндірмелерін қосу",
+    generatedLessonPackage: "Жасалған сабақ пакеті",
+    reviewAdjustContent:
+      "Мазмұнды қарап шығып, мұғалімге немесе оқушыға экспорттаудан бұрын түзетіңіз.",
+    translatedLessonText: "Аударылған сабақ мәтіні",
+    editableTranslationPreview: "Өңдеуге болатын аударма нобайы.",
+    glossaryAndKeyTerms: "Глоссарий және негізгі терминдер",
+    coreTermsForUnderstanding: "Екітілді түсінуге арналған негізгі терминдер.",
+    simplifiedExplanation: "Жеңілдетілген түсіндірме",
+    editableExplanation: "Режимге бейімделген, өңдеуге болатын түсіндірме.",
+    quizPreview: "Тестті алдын ала көру",
+    practiceViewDescription:
+      "Ағымдағы тест параметрлерімен берілетін жаттығу көрінісі.",
+    writeShortAnswer: "Қысқа жауабыңызды жазыңыз...",
+    answerLabel: "Жауап:",
+    whyLabel: "Неге:",
+    notAvailable: "Жоқ",
+    practiceScore: "Жаттығу ұпайы",
+    teacherLessonPreparation: "Мұғалімнің сабақ дайындауы",
+    teacherPreparationDescription:
+      "Қолмен мәтін енгізу, PDF жүктеу немесе DOCX жүктеу арқылы екітілді сабақ пакетін дайындап, кейін AI қолдауымен аударма және оқу материалдарын жасаңыз.",
+    lessonInputAndDocumentProcessing: "Сабақ мәтінін енгізу және құжатты өңдеу",
+    lessonTitle: "Сабақ атауы",
+    lessonTitlePlaceholder: "Мысалы: Фотосинтезге кіріспе",
+    targetLanguage: "Мақсатты тіл",
+    guidanceMode: "Нұсқаулық режимі",
+    uploadDocxRecommended: "DOCX жүктеу (ұсынылады)",
+    uploadPdfExperimental: "PDF жүктеу (эксперименттік)",
+    pasteTextInput: "Мәтінді қолмен енгізу",
+    processingUploadedDocument: "Жүктелген құжат өңделіп жатыр...",
+    pdfExperimentalWarning:
+      "PDF қабаттастырудың эксперименттік режимі: күрделі макеттер мен кестелер дәл келмеуі мүмкін.",
+    sourceTextPreviewEditable: "Бастапқы мәтінді алдын ала көру (өңдеуге болады)",
+    sourceTextPlaceholder:
+      "Сабақ мәтінін осы жерге қойыңыз немесе PDF / DOCX жүктеп, алынған мазмұнды өңдеңіз.",
+    generateAiLearningSupport: "AI оқу қолдауын жасау",
+    generatingAiLearningSupport: "AI оқу қолдауы жасалып жатыр...",
+    exportTranslatedDocxRecommended: "Аударылған DOCX файлын экспорттау (ұсынылады)",
+    exportLearningPackageTeacherJson:
+      "Сабақ пакетін экспорттау (мұғалім JSON)",
+    exportLearningPackageStudentJson:
+      "Сабақ пакетін экспорттау (оқушы JSON)",
+    exportTeacherHandoutPdf: "Мұғалімге арналған материалды экспорттау (PDF)",
+    exportStudentHandoutPdf: "Оқушыға арналған материалды экспорттау (PDF)",
+    exportLayoutPreservingPdfExperimental:
+      "Пішімі сақталған PDF экспорттау (эксперименттік)",
+    studentLearningWorkspace: "Оқушының оқу жұмыс аймағы",
+    studentWorkspaceDescription:
+      "Мұғалім дайындаған сабақ пакетін импорттап, бағытталған екітілді оқу тапсырмаларын орындаңыз.",
+    importLessonPackage: "Сабақ пакетін импорттау",
+    importLessonPackageDescription:
+      "Мұғалімнің жұмыс аймағынан экспортталған JSON пакетін таңдаңыз.",
+    loadLatestTeacherDraft: "Мұғалімнің соңғы нұсқасын жүктеу",
+    packageType: "Пакет түрі",
+    sourceType: "Дереккөз түрі",
+    sourceTypeText: "Мәтін",
+    sourceTypePdf: "PDF",
+    sourceTypeDocx: "DOCX",
+    glossary: "Глоссарий",
+    practiceQuiz: "Жаттығу тесті",
+    writeYourAnswer: "Жауабыңызды жазыңыз...",
+    checkQuiz: "Тестті тексеру",
+    score: "Ұпай",
+    packageTypeTeacher: "Мұғалім",
+    packageTypeStudent: "Оқушы",
+    languageToggleEnglish: "English",
+    languageToggleKazakh: "Қазақша",
+    untitledLesson: "Атауы жоқ сабақ",
+    targetLanguageLabels: {
+      English: "Ағылшын тілі",
+      Chinese: "Қытай тілі",
+      Russian: "Орыс тілі",
+      Kazakh: "Қазақ тілі",
+      Spanish: "Испан тілі",
+      French: "Француз тілі",
+      Arabic: "Араб тілі",
+      Hindi: "Хинди",
+      Swahili: "Суахили",
+      German: "Неміс тілі",
+      Indonesian: "Индонезия тілі",
+      Korean: "Корей тілі",
+      Japanese: "Жапон тілі",
+    },
+    quizTypeLabels: {
+      multiple_choice: "Бірнеше жауап нұсқасы",
+      true_false: "Дұрыс / Бұрыс",
+      short_answer: "Қысқа жауап",
+    },
+    teacherTip:
+      "Мұғалімге кеңес: алдымен тест параметрлерін баптап, содан кейін AI оқу қолдауын жасаңыз.",
+    recommendedWorkflow:
+      "Ұсынылатын жұмыс тәртібі: құрылымды жақсы сақтау үшін DOCX жүктеңіз. PDF қабаттастыруы эксперименттік.",
+    manualTextModeIsActive: "Қолмен мәтін енгізу режимі белсенді.",
+    manualTextModeSummary:
+      "Қолмен мәтін енгізу режимі: мазмұнды тікелей теріңіз немесе қойыңыз. Құрылымды құжаттар үшін DOCX ұсынылады.",
+    pleaseUploadDocx: "Ұсынылатын DOCX жұмыс үдерісі үшін .docx файлын жүктеңіз.",
+    pleaseUploadPdf: "Эксперименттік қабаттастыру режимі үшін .pdf файлын жүктеңіз.",
+    pdfParsed: (fileName, pageCount) => `PDF талданды: ${fileName} (${pageCount} бет)`,
+    pdfExperimentalSummary:
+      "PDF эксперименттік режимі: қабаттастырылған экспорт көріністі шамамен сақтайды, бірақ күрделі кестелерде ауытқу болуы мүмкін.",
+    docxParsed: (fileName, totalBlocks) =>
+      `DOCX талданды: ${fileName} (${totalBlocks} мәтін блогы табылды)`,
+    docxExtractionAudit: (quick) =>
+      `DOCX шығару есебі: абзацтар=${quick.paragraph}, тақырыптар=${quick.heading}, тізімдер=${quick.listItem}, кесте ұяшықтары=${quick.tableCell}, мәтіндік өрістер=${quick.textBox}, графикалық мәтін=${quick.drawingText}, колонтитулдар=${quick.headerFooter}, өткізіп жіберілгені=${quick.skipped}.`,
+    unsupportedFileType:
+      "Қолдау көрсетілмейтін файл түрі. .pdf немесе .docx файлын жүктеңіз.",
+    documentProcessingFailed: "Құжатты өңдеу сәтсіз аяқталды.",
+    pleaseEnterLessonText:
+      "Мәтінді енгізіңіз немесе генерация алдында PDF / DOCX жүктеңіз.",
+    generatingLessonSupport: "AI оқу қолдау пакеті жасалып жатыр...",
+    docxBatchedMode:
+      "DOCX пакеттік режимі: құрылымды DOCX блоктары кішірек сұраулармен аударылып жатыр. Алдын ала көру мәтіні тек көрсету және тексеру үшін қолданылады.",
+    generatingTeachingSupport:
+      "2/2 кезең: жергілікті Ollama арқылы глоссарий, түсіндірме және тест жасалып жатыр...",
+    noStructuredDocxBlocks:
+      "Аударма үшін құрылымды DOCX блоктары табылмады.",
+    docxGenerationFallbackUsed: (reason) =>
+      `DOCX генерациясында қосалқы режим қолданылды. ${reason || "Жергілікті Ollama арқылы DOCX генерациясы толық аяқталмады."}`,
+    docxBatchCompleted: (summary) =>
+      `DOCX блоктарын пакеттік аудару аяқталды. аударылды=${summary.translated ?? "?"}, сақталды=${summary.preserved ?? "?"}, өзгеріссіз қалды=${summary.unchangedAfterTranslate ?? "?"}.`,
+    docxBatchedTranslationFailed: (reason) =>
+      `DOCX пакеттік аудармасы сәтсіз аяқталды. Жергілікті қосалқы мазмұн жүктелді. ${reason || ""}`.trim(),
+    docxTranslationBatchProgress: (batch, total) =>
+      `1/2 кезең: құжат аударылып жатыр... ${batch}/${total} пакет`,
+    docxRetryModeProgress: (block, blockTotal, batch, batchTotal) =>
+      `Толық емес блоктар қайта аударылып жатыр... ${batch}/${batchTotal} пакеттегі ${block}/${blockTotal} блок`,
+    retryingIncompleteBlocks: (count) =>
+      `Толық емес блоктар қайта аударылып жатыр... ${count} блокқа қатаң аударма қажет.`,
+    translatingLessonContent:
+      "1/2 кезең: құжат жергілікті Ollama арқылы аударылып жатыр...",
+    noTranslationChunks: "Аудармаға арналған бөліктер табылмады.",
+    experimentalPdfOverlayTranslated:
+      " PDF қабаттастыру блоктары аударылды. Күрделі кестелер мен макеттерді қолмен тексеріңіз.",
+    localOllamaFallbackUsed: (lessonReason, documentReason) =>
+      `Тұрақтылық үшін жергілікті Ollama қосалқы режимі қолданылды. ${lessonReason || ""} ${documentReason || ""}`.trim(),
+    aiLearningSupportGenerated: (documentMessage) =>
+      `AI оқу қолдауы сәтті жасалды.${documentMessage || ""}`,
+    couldNotReachLocalOllama: (reason) =>
+      `Жергілікті Ollama-ға қосылу мүмкін болмады. Жергілікті қосалқы мазмұн жүктелді. ${reason || ""}`.trim(),
+    teacherJsonExported: "Мұғалім JSON пакеті экспортталды.",
+    studentJsonExported: "Оқушы JSON пакеті экспортталды.",
+    teacherPdfExported: "Мұғалім PDF файлы экспортталды.",
+    studentPdfExported: "Оқушы PDF файлы экспортталды.",
+    pdfExportFailed: "PDF экспорттау сәтсіз аяқталды.",
+    overlayPdfRequiresSource:
+      "Қабаттастырылған PDF экспорттау үшін жүктелген бастапқы PDF құжаты қажет.",
+    overlayPdfExported:
+      "Эксперименттік қабаттастырылған PDF экспортталды. Күрделі кестелерді қолмен тексеріңіз.",
+    overlayPdfExportFailed: "Қабаттастырылған PDF экспорттау сәтсіз аяқталды.",
+    translatedDocxExported: "Аударылған DOCX экспортталды (ұсынылады).",
+    docxExportFailed: "DOCX экспорттау сәтсіз аяқталды.",
+    importingLessonPackage: "Сабақ пакеті импортталып жатыр...",
+    importedLessonPackage: (lessonTitle) => `Сабақ пакеті импортталды: ${lessonTitle}`,
+    importLessonPackageFailed: "Сабақ пакетін импорттау мүмкін болмады.",
+    noTeacherLessonAvailable:
+      "Әзірге мұғалім сабағы жоқ. Алдымен сабақ жасаңыз.",
+    loadedLatestTeacherDraft:
+      "Мұғалімнің соңғы нұсқасы Оқушының жұмыс аймағына жүктелді.",
+    localFallbackLessonGenerated: "Жергілікті қосалқы сабақ жасалды.",
+    localFallbackUsedReason: "Жергілікті қосалқы режим қолданылды.",
+    lessonSupportFailed:
+      "Жергілікті Ollama арқылы сабаққа қолдау жасау сәтсіз аяқталды.",
+    docxBlockFailure: "DOCX блогын өңдеу сәтсіз аяқталды.",
+    unknownBatchError: "Белгісіз пакет қатесі.",
+    unknownBlockError: "Белгісіз блок қатесі.",
+    docxBatchReason: (batch, total, reason) =>
+      `${batch}/${total} пакет: ${reason}`,
+    docxBatchFailedReason: (batch, total, reason) =>
+      `${batch}/${total} пакет сәтсіз аяқталды: ${reason}`,
+    docxBatchBlockReason: (batch, total, block, blockTotal, reason) =>
+      `${batch}/${total} пакеттегі ${block}/${blockTotal} блок: ${reason}`,
+    docxBatchBlockFailedReason: (batch, total, block, blockTotal, reason) =>
+      `${batch}/${total} пакеттегі ${block}/${blockTotal} блок сәтсіз аяқталды: ${reason}`,
+    ollamaEmptyResponse: "Ollama бос жауап қайтарды.",
+    ollamaNoJson: "Ollama жауабында JSON табылмады.",
+    ollamaInvalidJson: "Ollama жарамсыз JSON жауап қайтарды.",
+    ollamaNoContent: "Ollama жауабында message.content өрісі болмады.",
+    ollamaConnectionFailed: (reason) =>
+      `Жергілікті Ollama-ға ${OLLAMA_CONFIG.baseUrl} мекенжайы бойынша қосылу мүмкін болмады. ${reason || ""}`.trim(),
+    ollamaHttpError: (status, body) =>
+      `Ollama HTTP ${status}: ${body || ""}`.trim(),
+  },
+};
+let runtimeUiLanguage = "en";
+
 const navItems = [
-  { id: "home", label: "Overview" },
-  { id: "teacher", label: "Teacher Workspace" },
-  { id: "student", label: "Student Workspace" },
+  { id: "home" },
+  { id: "teacher" },
+  { id: "student" },
 ];
 
 const languageOptions = [
-  "English",
-  "Chinese",
-  "Spanish",
-  "French",
-  "Arabic",
-  "Hindi",
-  "Swahili",
-  "German",
-  "Indonesian",
-  "Korean",
-  "Japanese",
+  { value: "English" },
+  { value: "Chinese" },
+  { value: "Russian" },
+  { value: "Kazakh" },
+  { value: "Spanish" },
+  { value: "French" },
+  { value: "Arabic" },
+  { value: "Hindi" },
+  { value: "Swahili" },
+  { value: "German" },
+  { value: "Indonesian" },
+  { value: "Korean" },
+  { value: "Japanese" },
 ];
 
 const defaultQuizSettings = {
@@ -54,9 +500,10 @@ const DOCX_TRANSLATION_BATCH_MAX_CHARS = 1800;
 const OLLAMA_CONFIG = {
   baseUrl: "http://127.0.0.1:11434",
   model: "qwen3:14b",
+  keepAlive: "10m",
 };
 const OLLAMA_TRANSLATION_OPTIONS = {
-  temperature: 0.7,
+  temperature: 0.3,
   top_p: 0.8,
   top_k: 20,
   min_p: 0,
@@ -66,10 +513,95 @@ const OLLAMA_ENRICHMENT_OPTIONS = {
   top_p: 0.95,
   top_k: 20,
   min_p: 0,
+  num_predict: 2048,
 };
 const PLAIN_TEXT_TRANSLATION_CHUNK_MAX_CHARS = 1800;
 
+const TARGET_LANGUAGE_CONFIG = {
+  English: {
+    prompt:
+      "Translate into natural English. Preserve names, formulas, URLs, codes, and technical identifiers only when appropriate.",
+    retryPrompt:
+      "Translate this block completely into natural English. Preserve names, formulas, URLs, codes, and technical identifiers only when appropriate.",
+    expectedScript: "",
+  },
+  Russian: {
+    prompt:
+      "Translate into standard Russian using Cyrillic script. Preserve names, formulas, URLs, codes, and technical identifiers only when appropriate.",
+    retryPrompt:
+      "Translate this block completely into standard Russian Cyrillic. Preserve names, formulas, URLs, codes, and technical identifiers only when appropriate.",
+    expectedScript: "cyrillic",
+  },
+  Kazakh: {
+    prompt:
+      "Translate into natural Kazakh using Cyrillic script. Do not write in Russian. Do not use Kazakh Latin script. Preserve names, formulas, URLs, codes, and technical identifiers only when appropriate.",
+    retryPrompt:
+      "Translate this block completely into Kazakh Cyrillic. Do not answer in Russian. Do not use Latin script. Preserve names, formulas, URLs, codes, and technical identifiers only when appropriate.",
+    expectedScript: "cyrillic",
+  },
+};
+
 const validPages = new Set(navItems.map((item) => item.id));
+
+function getUiText(language) {
+  return UI_TEXT[language] || UI_TEXT.en;
+}
+
+function getRuntimeUiText() {
+  return getUiText(runtimeUiLanguage);
+}
+
+function getTargetLanguageLabel(value, uiLanguage) {
+  const text = getUiText(uiLanguage);
+  return text.targetLanguageLabels?.[value] || value;
+}
+
+function getQuizTypeLabel(type, uiLanguage) {
+  const text = getUiText(uiLanguage);
+  return text.quizTypeLabels?.[type] || type;
+}
+
+function getPackageTypeLabel(value, uiLanguage) {
+  const text = getUiText(uiLanguage);
+  if (value === "teacher") return text.packageTypeTeacher;
+  if (value === "student") return text.packageTypeStudent;
+  return value || text.packageTypeStudent;
+}
+
+function getDocumentSourceLabel(value, uiLanguage) {
+  const text = getUiText(uiLanguage);
+  if (value === "pdf") return text.sourceTypePdf;
+  if (value === "docx") return text.sourceTypeDocx;
+  return text.sourceTypeText;
+}
+
+function getTargetLanguageConfig(targetLanguage) {
+  return (
+    TARGET_LANGUAGE_CONFIG[targetLanguage] || {
+      prompt:
+        `Translate into natural ${targetLanguage}. Preserve names, formulas, URLs, codes, and technical identifiers only when appropriate.`,
+      retryPrompt:
+        `Translate this block completely into natural ${targetLanguage}. Preserve names, formulas, URLs, codes, and technical identifiers only when appropriate.`,
+      expectedScript: "",
+    }
+  );
+}
+
+function estimateTranslationNumPredict(blocks) {
+  const inputChars = (Array.isArray(blocks) ? blocks : []).reduce(
+    (sum, block) => sum + String(block?.text || "").length,
+    0
+  );
+  return Math.min(4096, Math.max(1024, Math.ceil(inputChars * 1.8)));
+}
+
+function buildTranslationOptions(blocks, overrides = {}) {
+  return {
+    ...OLLAMA_TRANSLATION_OPTIONS,
+    num_predict: estimateTranslationNumPredict(blocks),
+    ...overrides,
+  };
+}
 
 function pageFromHash() {
   const raw = (window.location.hash || "#/home").replace("#/", "");
@@ -177,7 +709,10 @@ function createLocalFallbackLesson({
     quizSettings,
     quiz: expanded,
     mode,
-    meta: { usedFallback: true, reason: "Local fallback lesson generated." },
+    meta: {
+      usedFallback: true,
+      reason: getRuntimeUiText().localFallbackLessonGenerated,
+    },
   };
 }
 
@@ -206,9 +741,10 @@ function stripModelThinking(content) {
 }
 
 function extractJsonPayload(content) {
+  const t = getRuntimeUiText();
   let text = stripModelThinking(content);
   if (!text) {
-    throw new Error("Ollama returned an empty response.");
+    throw new Error(t.ollamaEmptyResponse);
   }
 
   if (text.startsWith("```")) {
@@ -233,13 +769,14 @@ function extractJsonPayload(content) {
         : arrayCandidate;
 
     if (!candidate) {
-      throw new Error("Ollama response did not contain JSON.");
+      throw new Error(t.ollamaNoJson);
     }
     return JSON.parse(candidate);
   }
 }
 
 async function callOllamaChat(messages, { think, options }) {
+  const t = getRuntimeUiText();
   let response;
   try {
     response = await fetch(`${OLLAMA_CONFIG.baseUrl}/api/chat`, {
@@ -250,30 +787,25 @@ async function callOllamaChat(messages, { think, options }) {
         messages,
         stream: false,
         think,
+        keep_alive: OLLAMA_CONFIG.keepAlive,
         options,
       }),
     });
   } catch (err) {
-    throw new Error(
-      `Could not connect to local Ollama at ${OLLAMA_CONFIG.baseUrl}. ${
-        err?.message || ""
-      }`.trim()
-    );
+    throw new Error(t.ollamaConnectionFailed(err?.message || ""));
   }
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(
-      `Ollama HTTP ${response.status}: ${body.slice(0, 400) || response.statusText}`
-    );
+    throw new Error(t.ollamaHttpError(response.status, body.slice(0, 400) || response.statusText));
   }
 
   const data = await response.json().catch(() => {
-    throw new Error("Ollama returned invalid response JSON.");
+    throw new Error(t.ollamaInvalidJson);
   });
   const content = data?.message?.content;
   if (typeof content !== "string") {
-    throw new Error("Ollama response did not include message.content.");
+    throw new Error(t.ollamaNoContent);
   }
   return content;
 }
@@ -298,8 +830,8 @@ function buildLessonEnrichmentMessages({
         "You are an assistant for an AI-supported bilingual education product. " +
         "Return ONLY strict JSON. Do not include markdown, comments, or explanatory text outside JSON. " +
         "Use this exact top-level schema: " +
-        '{"lessonTitle":"string","translation":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quizSettings":{},"quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}]}. ' +
-        "This is the teaching-support generation stage, not the translation stage. Use the completed translation provided by the user and do not retranslate or rewrite it. " +
+        '{"glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}]}. ' +
+        "This is the teaching-support generation stage, not the translation stage. Do not include a translation field and do not retranslate or rewrite the completed translation. " +
         "Rules: glossary should have 3-6 key terms. Quiz must follow requested question count, difficulty, and question types. " +
         "For multiple_choice, provide exactly 4 options and a valid answerIndex. For true_false, provide exactly 2 options and a valid answerIndex. For short_answer, provide answerText.",
     },
@@ -308,12 +840,12 @@ function buildLessonEnrichmentMessages({
       content:
         `Lesson title: ${lessonTitle}\n\n` +
         `Original source text:\n${sourceText}\n\n` +
-        `Completed ${targetLanguage} translation that must be returned unchanged in the JSON translation field:\n${translation}\n\n` +
+        `Completed ${targetLanguage} translation for reference only. Do not return it in JSON:\n${translation}\n\n` +
         `Target language: ${targetLanguage}\n` +
         `Learning mode: ${mode}\n` +
         `${modeHint}\n` +
         `Quiz settings:\n${JSON.stringify(quizSettings, null, 2)}\n\n` +
-        "Generate glossary, simplifiedExplanation, and quiz as strict JSON only. Include the completed translation exactly in the translation field.",
+        "Generate only glossary, simplifiedExplanation, and quiz as strict JSON. Do not include translation in the response.",
     },
   ];
 }
@@ -330,13 +862,13 @@ async function generateTeachingSupportWithOllama(fallbackInput, translation) {
   const parsed = extractJsonPayload(content);
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Ollama teaching-support response was not a JSON object.");
+    throw new Error(getRuntimeUiText().ollamaNoJson);
   }
 
   return {
     ...parsed,
     lessonTitle: parsed.lessonTitle || fallbackInput.lessonTitle,
-    translation: parsed.translation || translation,
+    translation,
     quizSettings: parsed.quizSettings || fallbackInput.quizSettings,
     meta: {
       ...(parsed.meta || {}),
@@ -410,7 +942,12 @@ function buildBlockTranslationMessages({
   targetLanguage,
   mode,
   preserveFormulas,
+  strictRetry = false,
 }) {
+  const languageConfig = getTargetLanguageConfig(targetLanguage);
+  const languageInstruction = strictRetry
+    ? languageConfig.retryPrompt
+    : languageConfig.prompt;
   return [
     {
       role: "system",
@@ -419,6 +956,7 @@ function buildBlockTranslationMessages({
         "Do not include markdown, comments, or explanatory text outside JSON. " +
         'Return exactly this schema: {"translations":[{"id":"same id from input","action":"translate or preserve","reason":"short reason","translatedText":"translated text, or original text when preserved"}]}. ' +
         "This is translation only. Do not summarize, omit content, add glossary terms, add explanations, or create quiz content. " +
+        `${languageInstruction} ` +
         "Translate normal natural-language content, including headings, paragraphs, list items, and table cell prose. " +
         "Preserve only URLs, emails, file paths, obvious identifiers, course codes, formulas, symbolic expressions, and non-language tokens. " +
         "Do not preserve text only because it is bold, large, in a heading, in a list, in a table, or specially formatted. " +
@@ -428,6 +966,7 @@ function buildBlockTranslationMessages({
       role: "user",
       content:
         `Target language: ${targetLanguage}\n` +
+        `Language instruction: ${languageInstruction}\n` +
         `Mode: ${mode}\n` +
         `Preserve formulas: ${Boolean(preserveFormulas)}\n\n` +
         `Blocks:\n${JSON.stringify(
@@ -445,27 +984,104 @@ function buildBlockTranslationMessages({
   ];
 }
 
+function normalizeForComparison(text) {
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function countMatches(text, pattern) {
+  return (String(text || "").match(pattern) || []).length;
+}
+
+function isMostlyNonTranslatableText(text) {
+  const value = String(text || "").trim();
+  if (!value) return true;
+  const cyrillic = countMatches(value, /[\u0400-\u04FF]/g);
+  const latin = countMatches(value, /[A-Za-z]/g);
+  const cjk = countMatches(value, /[\u3400-\u9FFF]/g);
+  const letters = cyrillic + latin + cjk;
+  if (letters === 0) return true;
+  if (/^(https?:\/\/|www\.)\S+$/i.test(value)) return true;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return true;
+  if (value.length <= 3 && letters <= 2) return true;
+  if (/^[A-Z0-9._:/@#%+\-=()[\]{}<>^|,;\s]+$/.test(value) && value.length <= 80) {
+    return true;
+  }
+  return false;
+}
+
+function shouldTranslateBlock(block) {
+  if (Boolean(block?.isFormula)) return false;
+  return !isMostlyNonTranslatableText(block?.text);
+}
+
+function getCyrillicRatio(text) {
+  const value = String(text || "");
+  const cyrillic = countMatches(value, /[\u0400-\u04FF]/g);
+  const latin = countMatches(value, /[A-Za-z]/g);
+  const denominator = cyrillic + latin;
+  return denominator === 0 ? 1 : cyrillic / denominator;
+}
+
+function validateTranslatedBlock({ block, translatedText, action, targetLanguage }) {
+  const reasons = [];
+  const sourceText = String(block?.text || "");
+  const finalText = String(translatedText || "").trim();
+  const needsTranslation = shouldTranslateBlock(block);
+  const normalizedSource = normalizeForComparison(sourceText);
+  const normalizedTranslation = normalizeForComparison(finalText);
+  const languageConfig = getTargetLanguageConfig(targetLanguage);
+
+  if (!needsTranslation) return reasons;
+  if (!finalText) reasons.push("empty_translated_text");
+  if (String(action || "").toLowerCase() === "preserve") reasons.push("unexpected_preserve");
+  if (
+    targetLanguage !== "English" &&
+    normalizedSource &&
+    normalizedSource === normalizedTranslation
+  ) {
+    reasons.push("identical_to_source");
+  }
+  if (
+    targetLanguage !== "Chinese" &&
+    sourceText.length >= 80 &&
+    finalText.length < sourceText.length * 0.25
+  ) {
+    reasons.push("suspiciously_short");
+  }
+  if (
+    languageConfig.expectedScript === "cyrillic" &&
+    countMatches(finalText, /[A-Za-z\u0400-\u04FF]/g) >= 8 &&
+    getCyrillicRatio(finalText) < 0.35
+  ) {
+    reasons.push("low_cyrillic_ratio");
+  }
+
+  return reasons;
+}
+
 async function translateBlocksWithOllama({
   blocks,
   targetLanguage,
   mode,
   preserveFormulas,
+  strictRetry = false,
 }) {
   const messages = buildBlockTranslationMessages({
     blocks,
     targetLanguage,
     mode,
     preserveFormulas,
+    strictRetry,
   });
   const content = await callOllamaChat(messages, {
     think: false,
-    options: OLLAMA_TRANSLATION_OPTIONS,
+    options: buildTranslationOptions(blocks, strictRetry ? { temperature: 0.2 } : {}),
   });
   const parsed = extractJsonPayload(content);
   const list = Array.isArray(parsed?.translations) ? parsed.translations : [];
 
   if (list.length === 0) {
-    throw new Error("Ollama block response did not include translations.");
+    throw new Error(getRuntimeUiText().ollamaNoJson);
   }
 
   const byId = new Map(
@@ -476,12 +1092,17 @@ async function translateBlocksWithOllama({
   const translationsById = {};
   const debugEntries = [];
   const debugSummary = createEmptyDebugSummary();
+  const suspiciousBlocks = [];
+  const responseItemCount = list.length;
 
   blocks.forEach((block, index) => {
-    const raw = byId.get(String(block.id || "")) || list[index];
+    const rawById = byId.get(String(block.id || ""));
+    const raw = rawById || list[index];
     if (!raw || typeof raw !== "object") {
-      throw new Error(`Ollama did not return translation data for block ${index + 1}.`);
+      throw new Error(getRuntimeUiText().ollamaNoJson);
     }
+    const idMatched =
+      Boolean(rawById) || String(raw.id || "") === String(block.id || "");
 
     const sourceText = String(block.text || "");
     const forcePreserve = Boolean(preserveFormulas && block.isFormula);
@@ -495,7 +1116,25 @@ async function translateBlocksWithOllama({
       action === "preserve" || forcePreserve ? sourceText : translatedText || sourceText;
 
     if (action !== "preserve" && !translatedText) {
-      throw new Error(`Ollama returned an empty translation for block ${index + 1}.`);
+      throw new Error(getRuntimeUiText().ollamaEmptyResponse);
+    }
+
+    const validationReasons = validateTranslatedBlock({
+      block,
+      translatedText: finalText,
+      action,
+      targetLanguage,
+    });
+    if (!idMatched) {
+      validationReasons.push("missing_or_mismatched_id");
+    }
+    if (validationReasons.length > 0) {
+      suspiciousBlocks.push({
+        id: block.id,
+        index,
+        reasons: validationReasons,
+      });
+      debugSummary.suspicious += 1;
     }
 
     translationsById[block.id] = finalText;
@@ -519,6 +1158,8 @@ async function translateBlocksWithOllama({
       apiAction: "ollama",
       action: forcePreserve ? "preserve" : action,
       reason: forcePreserve ? "frontend_formula_preserve" : String(raw.reason || "ollama"),
+      validationReasons,
+      needsRetry: validationReasons.length > 0,
       translatedText: finalText,
       textPreview: sourceText.slice(0, 140),
       frontendFlagIsFormula: Boolean(block.isFormula),
@@ -532,6 +1173,10 @@ async function translateBlocksWithOllama({
       reason: "",
       provider: "ollama",
       model: OLLAMA_CONFIG.model,
+      responseItemCount,
+      expectedItemCount: blocks.length,
+      itemCountMismatch: responseItemCount !== blocks.length,
+      suspiciousBlocks,
       debugSummary,
       debugEntries,
     },
@@ -596,7 +1241,9 @@ function normalizeLessonResult(raw, fallbackInput) {
   }
 
   return {
-    lessonTitle: String(raw.lessonTitle || fallbackInput.lessonTitle || "Untitled Lesson").trim(),
+    lessonTitle: String(
+      raw.lessonTitle || fallbackInput.lessonTitle || getRuntimeUiText().untitledLesson
+    ).trim(),
     sourceText: fallbackInput.sourceText,
     targetLanguage: fallbackInput.targetLanguage,
     translation,
@@ -751,6 +1398,7 @@ function createEmptyDebugSummary() {
     translated: 0,
     preserved: 0,
     unchangedAfterTranslate: 0,
+    suspicious: 0,
   };
 }
 
@@ -760,6 +1408,7 @@ function accumulateDebugSummary(summary, addition) {
   summary.translated += Number(next.translated || 0);
   summary.preserved += Number(next.preserved || 0);
   summary.unchangedAfterTranslate += Number(next.unchangedAfterTranslate || 0);
+  summary.suspicious += Number(next.suspicious || 0);
   return summary;
 }
 
@@ -773,7 +1422,7 @@ function logDocumentTranslationDebug(label, meta, translationsById, blocks) {
       debugSummary.translated ?? "?"
     }, preserved=${debugSummary.preserved ?? "?"}, unchanged=${
       debugSummary.unchangedAfterTranslate ?? "?"
-    }`
+    }, suspicious=${debugSummary.suspicious ?? 0}`
   );
   console.table(
     debugEntries.map((entry) => ({
@@ -785,6 +1434,9 @@ function logDocumentTranslationDebug(label, meta, translationsById, blocks) {
       apiAction: entry.apiAction || "",
       action: entry.action,
       reason: entry.reason,
+      validationReasons: Array.isArray(entry.validationReasons)
+        ? entry.validationReasons.join(", ")
+        : "",
       frontendFlagIsFormula: entry.frontendFlagIsFormula,
       translatedText: String(
         entry.translatedText || translationsById?.[entry.id] || ""
@@ -888,36 +1540,41 @@ function logDocxExtractionAudit(parsed) {
   console.groupEnd();
 }
 function Header(props) {
-  const { page, onPageChange, mode, onModeChange } = props;
+  const { page, onPageChange, mode, onModeChange, t, uiLanguage, onToggleUiLanguage } = props;
+  const navLabels = {
+    home: t.navOverview,
+    teacher: t.navTeacherWorkspace,
+    student: t.navStudentWorkspace,
+  };
   return html`
     <header className="hero">
       <div className="hero__overlay"></div>
       <div className="hero__content">
-        <div className="brand">AI-Supported Bilingual Education Tool</div>
-        <h1>Classroom Lesson Builder and Student Practice Demo</h1>
-        <p>
-          A practical prototype for preparing bilingual lesson support packages and delivering
-          student-ready learning content with glossary, explanation, and quiz practice.
-        </p>
+        <div className="brand">${t.brand}</div>
+        <h1>${t.headerTitle}</h1>
+        <p>${t.headerDescription}</p>
         <div className="toolbar">
           <div className="modeToggle">
             <button
               className=${mode === "teacher" ? "active" : ""}
               onClick=${() => onModeChange("teacher")}
             >
-              Teacher Mode
+              ${t.teacherMode}
             </button>
             <button
               className=${mode === "student" ? "active" : ""}
               onClick=${() => onModeChange("student")}
             >
-              Student Mode
+              ${t.studentMode}
             </button>
           </div>
           <div className="modeHint">
-            Active guidance mode:
-            <strong>${mode === "teacher" ? "Teacher Preparation" : "Student Learning"}</strong>
+            ${t.activeGuidanceMode}
+            <strong>${mode === "teacher" ? t.teacherPreparation : t.studentLearning}</strong>
           </div>
+          <button className="ghostBtn" onClick=${onToggleUiLanguage}>
+            ${uiLanguage === "en" ? t.languageToggleKazakh : t.languageToggleEnglish}
+          </button>
         </div>
         <nav className="tabs">
           ${navItems.map(
@@ -927,7 +1584,7 @@ function Header(props) {
                 className=${page === item.id ? "tab active" : "tab"}
                 onClick=${() => onPageChange(item.id)}
               >
-                ${item.label}
+                ${navLabels[item.id]}
               </button>
             `
           )}
@@ -938,27 +1595,25 @@ function Header(props) {
 }
 
 function HomePage(props) {
+  const { t } = props;
   return html`
     <section className="card">
-      <h2>Product Overview</h2>
-      <p>
-        This demo focuses on a reliable DOCX-first teaching workflow: teachers prepare structured
-        translated materials, then students import and practice with guided learning content.
-      </p>
+      <h2>${t.productOverview}</h2>
+      <p>${t.homeDescription}</p>
       <ul className="featureList">
-        <li>Paste text quickly, upload DOCX (recommended), or upload PDF (experimental).</li>
-        <li>DOCX workflow preserves headings, paragraphs, lists, and tables where practical.</li>
-        <li>Generate translation, glossary, simplified explanation, and configurable quiz.</li>
-        <li>Export translated DOCX (recommended), learning package JSON, and optional PDF outputs.</li>
-        <li>Overlay PDF export remains available for testing, but may be unstable on complex layouts.</li>
-        <li>Import prepared packages on the Student side for direct learning practice.</li>
+        <li>${t.featureDocxPdf}</li>
+        <li>${t.featureDocxWorkflow}</li>
+        <li>${t.featureGeneration}</li>
+        <li>${t.featureExport}</li>
+        <li>${t.featureOverlay}</li>
+        <li>${t.featureImport}</li>
       </ul>
       <div className="buttonRow">
         <button className="primaryBtn" onClick=${props.openTeacher}>
-          Open Teacher Workspace
+          ${t.openTeacherWorkspace}
         </button>
         <button className="ghostBtn" onClick=${props.openStudent}>
-          Open Student Workspace
+          ${t.openStudentWorkspace}
         </button>
       </div>
     </section>
@@ -966,7 +1621,7 @@ function HomePage(props) {
 }
 
 function QuizSettingsPanel(props) {
-  const { settings, onChange } = props;
+  const { settings, onChange, t } = props;
 
   function toggleQuestionType(type) {
     const current = new Set(settings.questionTypes);
@@ -981,14 +1636,12 @@ function QuizSettingsPanel(props) {
 
   return html`
     <div className="subCard">
-      <h3>Quiz Settings</h3>
-      <p className="sectionDesc">
-        Configure quiz complexity and response behavior for your lesson package.
-      </p>
+      <h3>${t.quizSettings}</h3>
+      <p className="sectionDesc">${t.quizSettingsDescription}</p>
 
       <div className="settingsGrid">
         <label>
-          Number of questions
+          ${t.numberOfQuestions}
           <input
             type="number"
             min="1"
@@ -999,27 +1652,27 @@ function QuizSettingsPanel(props) {
           />
         </label>
         <label>
-          Difficulty level
+          ${t.difficultyLevel}
           <select
             value=${settings.difficulty}
             onChange=${(e) => onChange({ ...settings, difficulty: e.target.value })}
           >
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
+            <option value="easy">${t.easy}</option>
+            <option value="medium">${t.medium}</option>
+            <option value="hard">${t.hard}</option>
           </select>
         </label>
       </div>
 
       <div className="checkGroup">
-        <div className="checkLabel">Question types</div>
+        <div className="checkLabel">${t.questionTypes}</div>
         <label className="checkItem">
           <input
             type="checkbox"
             checked=${settings.questionTypes.includes("multiple_choice")}
             onChange=${() => toggleQuestionType("multiple_choice")}
           />
-          Multiple Choice
+          ${t.multipleChoice}
         </label>
         <label className="checkItem">
           <input
@@ -1027,7 +1680,7 @@ function QuizSettingsPanel(props) {
             checked=${settings.questionTypes.includes("true_false")}
             onChange=${() => toggleQuestionType("true_false")}
           />
-          True / False
+          ${t.trueFalse}
         </label>
         <label className="checkItem">
           <input
@@ -1035,7 +1688,7 @@ function QuizSettingsPanel(props) {
             checked=${settings.questionTypes.includes("short_answer")}
             onChange=${() => toggleQuestionType("short_answer")}
           />
-          Short Answer
+          ${t.shortAnswer}
         </label>
       </div>
 
@@ -1046,7 +1699,7 @@ function QuizSettingsPanel(props) {
             checked=${settings.includeAnswerKey}
             onChange=${(e) => onChange({ ...settings, includeAnswerKey: e.target.checked })}
           />
-          Include answer key in Teacher view
+          ${t.includeAnswerKey}
         </label>
         <label className="checkItem">
           <input
@@ -1054,7 +1707,7 @@ function QuizSettingsPanel(props) {
             checked=${settings.includeExplanations}
             onChange=${(e) => onChange({ ...settings, includeExplanations: e.target.checked })}
           />
-          Include answer explanations
+          ${t.includeExplanations}
         </label>
       </div>
     </div>
@@ -1069,6 +1722,8 @@ function LessonResults(props) {
     showAnswerKey,
     statusMessage,
     statusType,
+    t,
+    uiLanguage,
   } = props;
 
   const quizScore = useMemo(() => {
@@ -1091,10 +1746,8 @@ function LessonResults(props) {
 
   return html`
     <div className="subCard">
-      <h3>Generated Lesson Package</h3>
-      <p className="sectionDesc">
-        Review and adjust content before exporting for teacher or student use.
-      </p>
+      <h3>${t.generatedLessonPackage}</h3>
+      <p className="sectionDesc">${t.reviewAdjustContent}</p>
       ${statusMessage &&
       html`
         <div
@@ -1108,8 +1761,8 @@ function LessonResults(props) {
 
       <div className="resultsGrid">
         <article className="resultCard">
-          <h3>Translated Lesson Text</h3>
-          <p className="sectionDesc">Editable translation preview.</p>
+          <h3>${t.translatedLessonText}</h3>
+          <p className="sectionDesc">${t.editableTranslationPreview}</p>
           <textarea
             rows="8"
             value=${lesson.translation}
@@ -1118,8 +1771,8 @@ function LessonResults(props) {
         </article>
 
         <article className="resultCard">
-          <h3>Glossary and Key Terms</h3>
-          <p className="sectionDesc">Core terms for bilingual understanding.</p>
+          <h3>${t.glossaryAndKeyTerms}</h3>
+          <p className="sectionDesc">${t.coreTermsForUnderstanding}</p>
           <ul className="glossaryList">
             ${(lesson.glossary || []).map(
               (item) => html`
@@ -1132,8 +1785,8 @@ function LessonResults(props) {
         </article>
 
         <article className="resultCard">
-          <h3>Simplified Explanation</h3>
-          <p className="sectionDesc">Editable explanation adapted to mode.</p>
+          <h3>${t.simplifiedExplanation}</h3>
+          <p className="sectionDesc">${t.editableExplanation}</p>
           <textarea
             rows="8"
             value=${lesson.simplifiedExplanation}
@@ -1143,14 +1796,14 @@ function LessonResults(props) {
         </article>
 
         <article className="resultCard">
-          <h3>Quiz Preview</h3>
-          <p className="sectionDesc">Practice view with current quiz settings applied.</p>
+          <h3>${t.quizPreview}</h3>
+          <p className="sectionDesc">${t.practiceViewDescription}</p>
           ${(lesson.quiz || []).map(
             (q, index) => {
               const answerKey = `q-${index}`;
               return html`
                 <div className="quizItem" key=${answerKey}>
-                  <p>${index + 1}. [${q.type}] ${q.question}</p>
+                  <p>${index + 1}. [${getQuizTypeLabel(q.type, uiLanguage)}] ${q.question}</p>
 
                   ${(q.type === "multiple_choice" || q.type === "true_false") &&
                   html`
@@ -1177,7 +1830,7 @@ function LessonResults(props) {
                   html`
                     <textarea
                       rows="3"
-                      placeholder="Write your short answer..."
+                      placeholder=${t.writeShortAnswer}
                       value=${teacherQuizAnswers[answerKey] || ""}
                       onChange=${(e) => onTeacherQuizAnswer(answerKey, e.target.value)}
                     ></textarea>
@@ -1186,20 +1839,20 @@ function LessonResults(props) {
                   ${showAnswerKey &&
                   html`
                     <p className="smallText">
-                      Answer:
+                      ${t.answerLabel}
                       ${q.type === "short_answer"
                         ? q.answerText
-                        : (q.options || [])[q.answerIndex] || "N/A"}
+                        : (q.options || [])[q.answerIndex] || t.notAvailable}
                     </p>
                   `}
                   ${showAnswerKey &&
                   q.explanation &&
-                  html`<p className="smallText">Why: ${q.explanation}</p>`}
+                  html`<p className="smallText">${t.whyLabel} ${q.explanation}</p>`}
                 </div>
               `;
             }
           )}
-          <p className="scoreLine">Practice score: ${quizScore}/${(lesson.quiz || []).length}</p>
+          <p className="scoreLine">${t.practiceScore}: ${quizScore}/${(lesson.quiz || []).length}</p>
         </article>
       </div>
     </div>
@@ -1238,37 +1891,38 @@ function TeacherWorkspace(props) {
     onTeacherQuizAnswer,
     statusMessage,
     statusType,
+    t,
+    uiLanguage,
   } = props;
 
   return html`
     <section className="card">
-      <h2>Teacher Lesson Preparation</h2>
-      <p>
-        Prepare a bilingual lesson package by using manual text, PDF upload, or DOCX upload,
-        then generate AI-supported translation and learning materials.
-      </p>
+      <h2>${t.teacherLessonPreparation}</h2>
+      <p>${t.teacherPreparationDescription}</p>
 
       <div className="subCard">
-        <h3>Lesson Input and Document Processing</h3>
+        <h3>${t.lessonInputAndDocumentProcessing}</h3>
         <div className="settingsGrid">
           <label>
-            Lesson title
+            ${t.lessonTitle}
             <input
               type="text"
               value=${lessonTitle}
               onChange=${(e) => setLessonTitle(e.target.value)}
-              placeholder="Example: Photosynthesis Introduction"
+              placeholder=${t.lessonTitlePlaceholder}
             />
           </label>
           <label>
-            Target language
+            ${t.targetLanguage}
             <select
               value=${targetLanguage}
               onChange=${(e) => setTargetLanguage(e.target.value)}
             >
               ${languageOptions.map(
                 (language) => html`
-                  <option key=${language} value=${language}>${language}</option>
+                  <option key=${language.value} value=${language.value}>
+                    ${getTargetLanguageLabel(language.value, uiLanguage)}
+                  </option>
                 `
               )}
             </select>
@@ -1277,14 +1931,14 @@ function TeacherWorkspace(props) {
 
         <div className="settingsGrid">
           <label>
-            Guidance mode
+            ${t.guidanceMode}
             <select disabled value=${generationMode}>
-              <option value="teacher">Teacher Mode</option>
-              <option value="student">Student Mode</option>
+              <option value="teacher">${t.teacherMode}</option>
+              <option value="student">${t.studentMode}</option>
             </select>
           </label>
           <label>
-            Upload DOCX (Recommended)
+            ${t.uploadDocxRecommended}
             <input
               type="file"
               accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -1295,10 +1949,10 @@ function TeacherWorkspace(props) {
 
         <div className="buttonRow">
           <button className="ghostBtn" onClick=${onUseManualText}>
-            Paste Text Input
+            ${t.pasteTextInput}
           </button>
           <label className="inlineFile">
-            Upload PDF (Experimental)
+            ${t.uploadPdfExperimental}
             <input
               type="file"
               accept=".pdf,application/pdf"
@@ -1308,24 +1962,24 @@ function TeacherWorkspace(props) {
         </div>
 
         ${documentLoading &&
-        html`<div className="statusBanner statusBanner--info">Processing uploaded document...</div>`}
+        html`<div className="statusBanner statusBanner--info">${t.processingUploadedDocument}</div>`}
         ${documentStatus && html`<div className="statusBanner statusBanner--info">${documentStatus}</div>`}
         ${documentError && html`<div className="statusBanner statusBanner--error">${documentError}</div>`}
         ${documentSummary && html`<div className="statusBanner statusBanner--info">${documentSummary}</div>`}
         ${lesson?.documentAssets?.sourceType === "pdf" &&
         html`
           <div className="statusBanner statusBanner--error">
-            Experimental PDF overlay mode: complex layouts and tables may not align perfectly yet.
+            ${t.pdfExperimentalWarning}
           </div>
         `}
 
         <label>
-          Source text preview (editable)
+          ${t.sourceTextPreviewEditable}
           <textarea
             rows="10"
             value=${sourceText}
             onChange=${(e) => setSourceText(e.target.value)}
-            placeholder="Paste lesson text here, or upload a PDF / DOCX and edit extracted content."
+            placeholder=${t.sourceTextPlaceholder}
           ></textarea>
         </label>
       </div>
@@ -1333,11 +1987,12 @@ function TeacherWorkspace(props) {
       <${QuizSettingsPanel}
         settings=${quizSettings}
         onChange=${(next) => setQuizSettings(normalizeQuizSettings(next))}
+        t=${t}
       />
 
       <div className="buttonRow">
         <button className="primaryBtn" disabled=${loading} onClick=${onGenerate}>
-          ${loading ? "Generating AI Learning Support..." : "Generate AI Learning Support"}
+          ${loading ? t.generatingAiLearningSupport : t.generateAiLearningSupport}
         </button>
       </div>
 
@@ -1345,22 +2000,22 @@ function TeacherWorkspace(props) {
       html`
         <div className="teacherActions">
           <button className="ghostBtn" onClick=${onExportDocx}>
-            Export Translated DOCX (Recommended)
+            ${t.exportTranslatedDocxRecommended}
           </button>
           <button className="ghostBtn" onClick=${onExportTeacherJson}>
-            Export Learning Package (Teacher JSON)
+            ${t.exportLearningPackageTeacherJson}
           </button>
           <button className="ghostBtn" onClick=${onExportStudentJson}>
-            Export Learning Package (Student JSON)
+            ${t.exportLearningPackageStudentJson}
           </button>
           <button className="ghostBtn" onClick=${onExportTeacherPdf}>
-            Export Teacher Handout (PDF)
+            ${t.exportTeacherHandoutPdf}
           </button>
           <button className="ghostBtn" onClick=${onExportStudentPdf}>
-            Export Student Handout (PDF)
+            ${t.exportStudentHandoutPdf}
           </button>
           <button className="ghostBtn" onClick=${onExportOverlayPdf}>
-            Export Layout-Preserving PDF (Experimental)
+            ${t.exportLayoutPreservingPdfExperimental}
           </button>
         </div>
       `}
@@ -1375,6 +2030,8 @@ function TeacherWorkspace(props) {
           showAnswerKey=${quizSettings.includeAnswerKey}
           statusMessage=${statusMessage}
           statusType=${statusType}
+          t=${t}
+          uiLanguage=${uiLanguage}
         />
       `}
     </section>
@@ -1391,6 +2048,8 @@ function StudentWorkspace(props) {
     studentAnswers,
     showStudentScore,
     onCheckQuiz,
+    t,
+    uiLanguage,
   } = props;
 
   const score = useMemo(() => {
@@ -1411,20 +2070,16 @@ function StudentWorkspace(props) {
 
   return html`
     <section className="card">
-      <h2>Student Learning Workspace</h2>
-      <p>
-        Import a teacher-prepared lesson package and complete the guided bilingual learning activities.
-      </p>
+      <h2>${t.studentLearningWorkspace}</h2>
+      <p>${t.studentWorkspaceDescription}</p>
 
       <div className="subCard">
-        <h3>Import Lesson Package</h3>
-        <p className="sectionDesc">
-          Choose a JSON package exported from Teacher Workspace.
-        </p>
+        <h3>${t.importLessonPackage}</h3>
+        <p className="sectionDesc">${t.importLessonPackageDescription}</p>
         <div className="buttonRow">
           <input type="file" accept=".json,application/json" onChange=${onImportFile} />
           <button className="ghostBtn" onClick=${onLoadFromTeacher}>
-            Load Latest Teacher Draft
+            ${t.loadLatestTeacherDraft}
           </button>
         </div>
         ${importStatus && html`<div className="statusBanner statusBanner--info">${importStatus}</div>`}
@@ -1436,18 +2091,21 @@ function StudentWorkspace(props) {
         <div className="subCard">
           <h3>${studentLesson.lessonTitle}</h3>
           <p className="smallText">
-            Target language: ${studentLesson.targetLanguage} | Package type:
-            ${studentLesson.packageType || "student"} | Source type:
-            ${studentLesson.metadata?.documentSourceType || "text"}
+            ${t.targetLanguage}: ${getTargetLanguageLabel(studentLesson.targetLanguage, uiLanguage)} |
+            ${t.packageType}: ${getPackageTypeLabel(studentLesson.packageType, uiLanguage)} |
+            ${t.sourceType}: ${getDocumentSourceLabel(
+              studentLesson.metadata?.documentSourceType,
+              uiLanguage
+            )}
           </p>
 
           <div className="resultsGrid">
             <article className="resultCard">
-              <h3>Translated Lesson Text</h3>
+              <h3>${t.translatedLessonText}</h3>
               <p>${studentLesson.translation}</p>
             </article>
             <article className="resultCard">
-              <h3>Glossary</h3>
+              <h3>${t.glossary}</h3>
               <ul className="glossaryList">
                 ${(studentLesson.glossary || []).map(
                   (item) => html`
@@ -1459,17 +2117,17 @@ function StudentWorkspace(props) {
               </ul>
             </article>
             <article className="resultCard">
-              <h3>Simplified Explanation</h3>
+              <h3>${t.simplifiedExplanation}</h3>
               <p>${studentLesson.simplifiedExplanation}</p>
             </article>
             <article className="resultCard">
-              <h3>Practice Quiz</h3>
+              <h3>${t.practiceQuiz}</h3>
               ${(studentLesson.quiz || []).map(
                 (q, index) => {
                   const key = `q-${index}`;
                   return html`
                     <div className="quizItem" key=${key}>
-                      <p>${index + 1}. [${q.type}] ${q.question}</p>
+                      <p>${index + 1}. [${getQuizTypeLabel(q.type, uiLanguage)}] ${q.question}</p>
 
                       ${(q.type === "multiple_choice" || q.type === "true_false") &&
                       html`
@@ -1497,7 +2155,7 @@ function StudentWorkspace(props) {
                         <textarea
                           rows="3"
                           value=${studentAnswers[key] || ""}
-                          placeholder="Write your answer..."
+                          placeholder=${t.writeYourAnswer}
                           onChange=${(e) => onStudentAnswer(key, e.target.value)}
                         ></textarea>
                       `}
@@ -1507,13 +2165,13 @@ function StudentWorkspace(props) {
               )}
 
               <div className="buttonRow">
-                <button className="primaryBtn" onClick=${onCheckQuiz}>Check Quiz</button>
+                <button className="primaryBtn" onClick=${onCheckQuiz}>${t.checkQuiz}</button>
               </div>
 
               ${showStudentScore &&
               html`
                 <p className="scoreLine">
-                  Score: ${score}/${(studentLesson.quiz || []).length}
+                  ${t.score}: ${score}/${(studentLesson.quiz || []).length}
                 </p>
               `}
             </article>
@@ -1526,7 +2184,16 @@ function StudentWorkspace(props) {
 
 function App() {
   const [page, setPage] = useState(pageFromHash());
+  const [uiLanguage, setUiLanguage] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem(UI_LANGUAGE_STORAGE_KEY);
+      return saved === "kk" ? "kk" : "en";
+    } catch (_err) {
+      return "en";
+    }
+  });
   const [mode, setMode] = useState("teacher");
+  const t = getUiText(uiLanguage);
 
   const [lessonTitle, setLessonTitle] = useState("Photosynthesis Introduction");
   const [sourceText, setSourceText] = useState(
@@ -1536,17 +2203,13 @@ function App() {
   const [quizSettings, setQuizSettings] = useState(defaultQuizSettings);
 
   const [loading, setLoading] = useState(false);
-  const [statusMessage, setStatusMessage] = useState(
-    "Teacher tip: configure quiz settings first, then generate AI learning support."
-  );
+  const [statusMessage, setStatusMessage] = useState(t.teacherTip);
   const [statusType, setStatusType] = useState("info");
 
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentStatus, setDocumentStatus] = useState("");
   const [documentError, setDocumentError] = useState("");
-  const [documentSummary, setDocumentSummary] = useState(
-    "Recommended workflow: Upload DOCX for best structure quality. PDF overlay is experimental."
-  );
+  const [documentSummary, setDocumentSummary] = useState(t.recommendedWorkflow);
   const [documentContext, setDocumentContext] = useState({
     sourceType: "text",
     fileName: "",
@@ -1573,6 +2236,28 @@ function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  useEffect(() => {
+    runtimeUiLanguage = uiLanguage;
+    try {
+      window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, uiLanguage);
+    } catch (_err) {
+      // Ignore localStorage write failures.
+    }
+  }, [uiLanguage]);
+
+  useEffect(() => {
+    if (!teacherLesson && !loading) {
+      setStatusMessage(t.teacherTip);
+    }
+    if (!documentLoading && documentContext.sourceType === "text") {
+      setDocumentSummary(documentStatus ? t.manualTextModeSummary : t.recommendedWorkflow);
+    }
+  }, [uiLanguage]);
+
+  function toggleUiLanguage() {
+    setUiLanguage((prev) => (prev === "en" ? "kk" : "en"));
+  }
+
   function handleModeChange(nextMode) {
     setMode(nextMode);
     setHash(nextMode === "teacher" ? "teacher" : "student");
@@ -1587,11 +2272,9 @@ function App() {
       blockTranslations: {},
       translationDebugEntries: [],
     });
-    setDocumentStatus("Manual text mode is active.");
+    setDocumentStatus(t.manualTextModeIsActive);
     setDocumentError("");
-    setDocumentSummary(
-      "Manual text mode: type or paste content directly. For structured documents, DOCX is recommended."
-    );
+    setDocumentSummary(t.manualTextModeSummary);
   }
 
   async function processUploadedDocument(file, expectedType = "any") {
@@ -1603,10 +2286,10 @@ function App() {
 
     try {
       if (expectedType === "docx" && !lowerName.endsWith(".docx")) {
-        throw new Error("Please upload a .docx file for the recommended DOCX workflow.");
+        throw new Error(t.pleaseUploadDocx);
       }
       if (expectedType === "pdf" && !lowerName.endsWith(".pdf")) {
-        throw new Error("Please upload a .pdf file for experimental overlay mode.");
+        throw new Error(t.pleaseUploadPdf);
       }
 
       if (lowerName.endsWith(".pdf")) {
@@ -1620,10 +2303,8 @@ function App() {
           blockTranslations: {},
           translationDebugEntries: [],
         });
-        setDocumentStatus(`PDF parsed: ${file.name} (${parsed.pageCount} page(s))`);
-        setDocumentSummary(
-          "PDF experimental mode: overlay export preserves visuals approximately, but complex tables may drift."
-        );
+        setDocumentStatus(t.pdfParsed(file.name, parsed.pageCount));
+        setDocumentSummary(t.pdfExperimentalSummary);
       } else if (lowerName.endsWith(".docx")) {
         const parsed = await importDocxFile(file);
         // Preview text is for UI display/debug. DOCX translation uses structured blocks only.
@@ -1637,17 +2318,15 @@ function App() {
           translationDebugEntries: [],
         });
         const totalBlocks = parsed?.traversalSummary?.totalBlocks || 0;
-        setDocumentStatus(`DOCX parsed: ${file.name} (${totalBlocks} text blocks found)`);
+        setDocumentStatus(t.docxParsed(file.name, totalBlocks));
         logDocxExtractionAudit(parsed);
         const quick = getDocxExtractionQuickCounts(parsed);
-        setDocumentSummary(
-          `DOCX extraction audit: paragraphs=${quick.paragraph}, headings=${quick.heading}, lists=${quick.listItem}, tableCells=${quick.tableCell}, textBoxes=${quick.textBox}, shapeText=${quick.drawingText}, headerFooter=${quick.headerFooter}, skipped=${quick.skipped}.`
-        );
+        setDocumentSummary(t.docxExtractionAudit(quick));
       } else {
-        throw new Error("Unsupported file type. Please upload .pdf or .docx.");
+        throw new Error(t.unsupportedFileType);
       }
     } catch (err) {
-      setDocumentError(err?.message || "Document processing failed.");
+      setDocumentError(err?.message || t.documentProcessingFailed);
       setDocumentStatus("");
     } finally {
       setDocumentLoading(false);
@@ -1682,7 +2361,114 @@ function App() {
       mode,
       preserveFormulas,
     });
-    const result = await translateBlocksWithOllama(requestPayload);
+    let result;
+    let forceRetryAll = false;
+    try {
+      result = await translateBlocksWithOllama(requestPayload);
+    } catch (initialErr) {
+      forceRetryAll = true;
+      result = {
+        translationsById: {},
+        meta: {
+          usedFallback: false,
+          reason: `batch_translation_failed:${initialErr?.message || t.unknownBatchError}`,
+          provider: "ollama",
+          model: OLLAMA_CONFIG.model,
+          debugSummary: createEmptyDebugSummary(),
+          debugEntries: [],
+          suspiciousBlocks: [],
+        },
+      };
+    }
+    const retryIds = new Set(
+      (Array.isArray(result.meta?.suspiciousBlocks) ? result.meta.suspiciousBlocks : [])
+        .map((item) => String(item.id || ""))
+        .filter(Boolean)
+    );
+    if (forceRetryAll || result.meta?.itemCountMismatch) {
+      blocks.forEach((block) => retryIds.add(String(block.id || "")));
+    }
+
+    if (retryIds.size > 0) {
+      setStatusType("info");
+      setStatusMessage(t.retryingIncompleteBlocks(retryIds.size));
+      result.meta.reason = mergeReasonList([
+        result.meta.reason,
+        result.meta.itemCountMismatch ? "translation_item_count_mismatch" : "",
+        "strict_retry_for_incomplete_blocks",
+      ]);
+      result.meta.retrySummary = {
+        attempted: retryIds.size,
+        fixed: 0,
+        preservedAfterRetry: 0,
+      };
+      const unresolvedSuspiciousBlocks = [];
+
+      for (const block of blocks) {
+        if (!retryIds.has(String(block.id || ""))) continue;
+        try {
+          const retryResult = await translateBlocksWithOllama({
+            ...requestPayload,
+            blocks: [block],
+            strictRetry: true,
+          });
+          if (
+            Array.isArray(retryResult.meta?.suspiciousBlocks) &&
+            retryResult.meta.suspiciousBlocks.length > 0
+          ) {
+            throw new Error(
+              retryResult.meta.suspiciousBlocks
+                .map((item) => `${item.id}: ${item.reasons.join(",")}`)
+                .join(" | ")
+            );
+          }
+
+          result.translationsById[block.id] =
+            retryResult.translationsById?.[block.id] || result.translationsById[block.id];
+          result.meta.retrySummary.fixed += 1;
+          if (forceRetryAll) {
+            accumulateDebugSummary(result.meta.debugSummary, retryResult.meta?.debugSummary);
+          }
+          const retryEntries = Array.isArray(retryResult.meta?.debugEntries)
+            ? retryResult.meta.debugEntries
+            : [];
+          result.meta.debugEntries.push(
+            ...retryEntries.map((entry) => ({
+              ...entry,
+              apiAction: "ollama_strict_retry",
+              reason: `strict_retry_success: ${entry.reason || "ollama"}`,
+            }))
+          );
+        } catch (retryErr) {
+          result.translationsById[block.id] = block.text;
+          result.meta.retrySummary.preservedAfterRetry += 1;
+          unresolvedSuspiciousBlocks.push({
+            id: block.id,
+            reasons: [retryErr?.message || "strict_retry_failed"],
+          });
+          result.meta.reason = mergeReasonList([
+            result.meta.reason,
+            `strict_retry_failed:${block.id}:${retryErr?.message || t.unknownBlockError}`,
+          ]);
+          result.meta.debugEntries.push(
+            createSingleBlockFallbackDebugEntry(
+              { block, originalIndex: blocks.indexOf(block) },
+              retryErr?.message || "strict_retry_failed"
+            )
+          );
+          if (forceRetryAll) {
+            result.meta.debugSummary.total += 1;
+          }
+          result.meta.debugSummary.preserved += 1;
+          result.meta.debugSummary.unchangedAfterTranslate += 1;
+        }
+      }
+      result.meta.suspiciousBlocks = unresolvedSuspiciousBlocks;
+      result.meta.usedFallback = result.meta.retrySummary.preservedAfterRetry > 0;
+      if (!result.meta.usedFallback) {
+        result.meta.reason = "";
+      }
+    }
 
     logDocumentTranslationDebug(
       "Document Translation Debug",
@@ -1712,9 +2498,7 @@ function App() {
       const batch = batches[batchIndex];
       const batchBlocks = batch.items.map((item) => item.block);
       setStatusType("info");
-      setStatusMessage(
-        `DOCX translation in progress: batch ${batchIndex + 1}/${batches.length}...`
-      );
+      setStatusMessage(t.docxTranslationBatchProgress(batchIndex + 1, batches.length));
 
       if (typeof console !== "undefined") {
         console.info(
@@ -1745,16 +2529,22 @@ function App() {
           usedFallback = true;
           if (batchResult.meta?.reason) {
             aggregatedReasons.push(
-              `Batch ${batchIndex + 1}/${batches.length}: ${batchResult.meta.reason}`
+              t.docxBatchReason(
+                batchIndex + 1,
+                batches.length,
+                batchResult.meta.reason
+              )
             );
           }
         }
       } catch (batchErr) {
         usedFallback = true;
         aggregatedReasons.push(
-          `Batch ${batchIndex + 1}/${batches.length} failed: ${
-            batchErr?.message || "Unknown batch error."
-          }`
+          t.docxBatchFailedReason(
+            batchIndex + 1,
+            batches.length,
+            batchErr?.message || t.unknownBatchError
+          )
         );
 
         if (typeof console !== "undefined") {
@@ -1769,9 +2559,12 @@ function App() {
           retriedBlocks += 1;
           setStatusType("info");
           setStatusMessage(
-            `DOCX retry mode: block ${blockIndex + 1}/${batch.items.length} in batch ${
-              batchIndex + 1
-            }/${batches.length}...`
+            t.docxRetryModeProgress(
+              blockIndex + 1,
+              batch.items.length,
+              batchIndex + 1,
+              batches.length
+            )
           );
 
           try {
@@ -1793,9 +2586,13 @@ function App() {
               usedFallback = true;
               if (singleResult.meta?.reason) {
                 aggregatedReasons.push(
-                  `Batch ${batchIndex + 1}/${batches.length} block ${blockIndex + 1}/${
-                    batch.items.length
-                  }: ${singleResult.meta.reason}`
+                  t.docxBatchBlockReason(
+                    batchIndex + 1,
+                    batches.length,
+                    blockIndex + 1,
+                    batch.items.length,
+                    singleResult.meta.reason
+                  )
                 );
               }
             }
@@ -1815,9 +2612,13 @@ function App() {
               unchangedAfterTranslate: 1,
             });
             aggregatedReasons.push(
-              `Batch ${batchIndex + 1}/${batches.length} block ${blockIndex + 1}/${
-                batch.items.length
-              } failed: ${singleErr?.message || "Unknown block error."}`
+              t.docxBatchBlockFailedReason(
+                batchIndex + 1,
+                batches.length,
+                blockIndex + 1,
+                batch.items.length,
+                singleErr?.message || t.unknownBlockError
+              )
             );
 
             if (typeof console !== "undefined") {
@@ -1859,17 +2660,17 @@ function App() {
     const trimmedText = sourceText.trim();
     if (!trimmedText) {
       setStatusType("error");
-      setStatusMessage("Please enter lesson text or upload a PDF / DOCX before generating.");
+      setStatusMessage(t.pleaseEnterLessonText);
       return;
     }
 
     setLoading(true);
     setStatusType("info");
-    setStatusMessage("Generating AI learning support package...");
+    setStatusMessage(t.generatingLessonSupport);
     setTeacherQuizAnswers({});
 
     const fallbackInput = {
-      lessonTitle: lessonTitle.trim() || "Untitled Lesson",
+      lessonTitle: lessonTitle.trim() || t.untitledLesson,
       sourceText: trimmedText,
       targetLanguage,
       mode,
@@ -1878,9 +2679,7 @@ function App() {
 
     if (documentContext.sourceType === "docx" && documentContext.docxData) {
       setStatusType("info");
-      setStatusMessage(
-        "DOCX batched mode: translating structured DOCX blocks in smaller requests. Preview text is display/debug only."
-      );
+      setStatusMessage(t.docxBatchedMode);
       if (typeof console !== "undefined") {
         console.info(
           "[DOCX Batched Path] Preview text is not used as translation input. Lesson support uses local Ollama."
@@ -1889,7 +2688,7 @@ function App() {
       try {
         const docxBlocks = buildDocxTranslationBlocks(documentContext.docxData);
         if (!Array.isArray(docxBlocks) || docxBlocks.length === 0) {
-          throw new Error("No structured DOCX blocks were found for translation.");
+          throw new Error(t.noStructuredDocxBlocks);
         }
 
         const translationResult = await translateDocxBlocksInBatches(docxBlocks, true);
@@ -1902,7 +2701,7 @@ function App() {
         let aiLessonMeta = { usedFallback: false, reason: "" };
         try {
           setStatusType("info");
-          setStatusMessage("Generating glossary, explanation, and quiz with local Ollama...");
+          setStatusMessage(t.generatingTeachingSupport);
           const aiPayload = await generateTeachingSupportWithOllama(
             fallbackInput,
             combinedTranslation
@@ -1913,7 +2712,7 @@ function App() {
           aiLessonBase = createLocalFallbackLesson(fallbackInput);
           aiLessonMeta = {
             usedFallback: true,
-            reason: lessonErr?.message || "Local Ollama lesson support failed.",
+            reason: lessonErr?.message || t.lessonSupportFailed,
           };
         }
 
@@ -1956,20 +2755,10 @@ function App() {
 
         if (usedFallback) {
           setStatusType("error");
-          setStatusMessage(
-            `DOCX generation fallback used. ${
-              fallbackReason || "Local Ollama DOCX generation did not fully complete."
-            }`
-          );
+          setStatusMessage(t.docxGenerationFallbackUsed(fallbackReason));
         } else {
           setStatusType("info");
-          setStatusMessage(
-            `DOCX block translation completed in batches. translated=${
-              summary.translated ?? "?"
-            }, preserved=${summary.preserved ?? "?"}, unchanged=${
-              summary.unchangedAfterTranslate ?? "?"
-            }.`
-          );
+          setStatusMessage(t.docxBatchCompleted(summary));
         }
       } catch (docxErr) {
         const fallback = createLocalFallbackLesson(fallbackInput);
@@ -1987,13 +2776,9 @@ function App() {
               "DOCX batched translation mode active; fallback lesson loaded after block translation failure.",
           },
         });
-        setTeacherMeta({ usedFallback: true, reason: docxErr?.message || "DOCX block failure." });
+        setTeacherMeta({ usedFallback: true, reason: docxErr?.message || t.docxBlockFailure });
         setStatusType("error");
-        setStatusMessage(
-          `DOCX batched translation failed. Local fallback loaded. ${
-            docxErr?.message || ""
-          }`.trim()
-        );
+        setStatusMessage(t.docxBatchedTranslationFailed(docxErr?.message || ""));
       } finally {
         setLoading(false);
       }
@@ -2007,14 +2792,14 @@ function App() {
         );
       }
       setStatusType("info");
-      setStatusMessage("Translating lesson content with local Ollama...");
+      setStatusMessage(t.translatingLessonContent);
 
       const translationBlocks =
         documentContext.sourceType === "pdf" && documentContext.pdfOverlayData?.allBlocks
           ? documentContext.pdfOverlayData.allBlocks
           : buildPlainTextTranslationBlocks(fallbackInput.sourceText);
       if (!Array.isArray(translationBlocks) || translationBlocks.length === 0) {
-        throw new Error("No translation chunks were available.");
+        throw new Error(t.noTranslationChunks);
       }
 
       const translationResult = await translateBlocksForDocument(
@@ -2027,14 +2812,23 @@ function App() {
       );
 
       setStatusType("info");
-      setStatusMessage("Generating glossary, explanation, and quiz with local Ollama...");
-      const payload = await generateTeachingSupportWithOllama(
-        fallbackInput,
-        completedTranslation
-      );
-
-      const lessonBase = normalizeLessonResult(payload, fallbackInput);
-      const lessonMeta = payload.meta || lessonBase.meta || { usedFallback: false, reason: "" };
+      setStatusMessage(t.generatingTeachingSupport);
+      let lessonBase;
+      let lessonMeta = { usedFallback: false, reason: "" };
+      try {
+        const payload = await generateTeachingSupportWithOllama(
+          fallbackInput,
+          completedTranslation
+        );
+        lessonBase = normalizeLessonResult(payload, fallbackInput);
+        lessonMeta = payload.meta || lessonBase.meta || lessonMeta;
+      } catch (lessonErr) {
+        lessonBase = createLocalFallbackLesson(fallbackInput);
+        lessonMeta = {
+          usedFallback: true,
+          reason: lessonErr?.message || t.lessonSupportFailed,
+        };
+      }
       const nextLesson = {
         ...lessonBase,
         sourceText: fallbackInput.sourceText,
@@ -2056,13 +2850,9 @@ function App() {
       };
 
       let documentMessage = "";
-      const documentMeta =
-        documentContext.sourceType === "pdf"
-          ? translationResult.meta || { usedFallback: false, reason: "" }
-          : { usedFallback: false, reason: "" };
+      const documentMeta = translationResult.meta || { usedFallback: false, reason: "" };
       if (documentContext.sourceType === "pdf" && documentContext.pdfOverlayData?.allBlocks) {
-        documentMessage =
-          " Experimental PDF overlay blocks translated. Verify complex layouts/tables manually.";
+        documentMessage = t.experimentalPdfOverlayTranslated;
       }
 
       setTeacherLesson(nextLesson);
@@ -2074,11 +2864,11 @@ function App() {
       if (lessonMeta?.usedFallback || documentMeta?.usedFallback) {
         setStatusType("error");
         setStatusMessage(
-          `Local Ollama fallback used for stability. ${(lessonMeta.reason || "")} ${(documentMeta.reason || "")}`.trim()
+          t.localOllamaFallbackUsed(lessonMeta.reason || "", documentMeta.reason || "")
         );
       } else {
         setStatusType("info");
-        setStatusMessage(`AI learning support package generated successfully.${documentMessage}`);
+        setStatusMessage(t.aiLearningSupportGenerated(documentMessage));
       }
     } catch (err) {
       const fallback = createLocalFallbackLesson(fallbackInput);
@@ -2095,11 +2885,11 @@ function App() {
           formulaPreservation: "Formula-like blocks are kept unchanged in fallback mode.",
         },
       });
-      setTeacherMeta(fallback.meta || { usedFallback: true, reason: "Local fallback used." });
-      setStatusType("error");
-      setStatusMessage(
-        `Could not reach local Ollama. Local fallback content loaded. ${err?.message || ""}`.trim()
+      setTeacherMeta(
+        fallback.meta || { usedFallback: true, reason: t.localFallbackUsedReason }
       );
+      setStatusType("error");
+      setStatusMessage(t.couldNotReachLocalOllama(err?.message || ""));
     } finally {
       setLoading(false);
     }
@@ -2128,7 +2918,7 @@ function App() {
     if (!pkg) return;
     exportLessonPackageJson(pkg);
     setStatusType("info");
-    setStatusMessage("Teacher JSON package exported.");
+    setStatusMessage(t.teacherJsonExported);
   }
 
   function exportStudentJson() {
@@ -2136,7 +2926,7 @@ function App() {
     if (!pkg) return;
     exportLessonPackageJson(pkg);
     setStatusType("info");
-    setStatusMessage("Student JSON package exported.");
+    setStatusMessage(t.studentJsonExported);
   }
 
   async function exportTeacherPdf() {
@@ -2145,10 +2935,10 @@ function App() {
     try {
       await exportLessonToPdf(pkg, { includeAnswerKey: true, audienceLabel: "Teacher" });
       setStatusType("info");
-      setStatusMessage("Teacher PDF exported.");
+      setStatusMessage(t.teacherPdfExported);
     } catch (err) {
       setStatusType("error");
-      setStatusMessage(err?.message || "PDF export failed.");
+      setStatusMessage(err?.message || t.pdfExportFailed);
     }
   }
 
@@ -2158,10 +2948,10 @@ function App() {
     try {
       await exportLessonToPdf(pkg, { includeAnswerKey: false, audienceLabel: "Student" });
       setStatusType("info");
-      setStatusMessage("Student PDF exported.");
+      setStatusMessage(t.studentPdfExported);
     } catch (err) {
       setStatusType("error");
-      setStatusMessage(err?.message || "PDF export failed.");
+      setStatusMessage(err?.message || t.pdfExportFailed);
     }
   }
 
@@ -2170,7 +2960,7 @@ function App() {
     const assets = teacherLesson.documentAssets || {};
     if (assets.sourceType !== "pdf" || !assets.pdfOverlayData) {
       setStatusType("error");
-      setStatusMessage("Overlay PDF export requires an uploaded PDF source document.");
+      setStatusMessage(t.overlayPdfRequiresSource);
       return;
     }
     try {
@@ -2183,10 +2973,10 @@ function App() {
         audienceLabel: "Teacher",
       });
       setStatusType("info");
-      setStatusMessage("Experimental overlay PDF exported. Verify complex tables manually.");
+      setStatusMessage(t.overlayPdfExported);
     } catch (err) {
       setStatusType("error");
-      setStatusMessage(err?.message || "Overlay PDF export failed.");
+      setStatusMessage(err?.message || t.overlayPdfExportFailed);
     }
   }
 
@@ -2207,10 +2997,10 @@ function App() {
         includeAnswerKey: Boolean(quizSettings.includeAnswerKey),
       });
       setStatusType("info");
-      setStatusMessage("Translated DOCX exported (recommended output).");
+      setStatusMessage(t.translatedDocxExported);
     } catch (err) {
       setStatusType("error");
-      setStatusMessage(err?.message || "DOCX export failed.");
+      setStatusMessage(err?.message || t.docxExportFailed);
     }
   }
 
@@ -2219,16 +3009,16 @@ function App() {
     if (!file) return;
 
     setImportError("");
-    setImportStatus("Importing lesson package...");
+    setImportStatus(t.importingLessonPackage);
     setShowStudentScore(false);
     setStudentAnswers({});
 
     try {
       const pkg = await importLessonPackageFile(file);
       setStudentLesson(pkg);
-      setImportStatus(`Imported lesson package: ${pkg.lessonTitle}`);
+      setImportStatus(t.importedLessonPackage(pkg.lessonTitle));
     } catch (err) {
-      setImportError(err?.message || "Could not import lesson package.");
+      setImportError(err?.message || t.importLessonPackageFailed);
       setImportStatus("");
     } finally {
       event.target.value = "";
@@ -2238,7 +3028,7 @@ function App() {
   function loadLatestTeacherDraft() {
     const pkg = buildPackage("student");
     if (!pkg) {
-      setImportError("No teacher lesson is available yet. Generate a lesson first.");
+      setImportError(t.noTeacherLessonAvailable);
       setImportStatus("");
       return;
     }
@@ -2246,7 +3036,7 @@ function App() {
     setStudentAnswers({});
     setShowStudentScore(false);
     setImportError("");
-    setImportStatus("Loaded latest teacher draft into Student Workspace.");
+    setImportStatus(t.loadedLatestTeacherDraft);
   }
 
   function handleTeacherQuizAnswer(questionKey, value) {
@@ -2264,6 +3054,9 @@ function App() {
         onPageChange=${setHash}
         mode=${mode}
         onModeChange=${handleModeChange}
+        t=${t}
+        uiLanguage=${uiLanguage}
+        onToggleUiLanguage=${toggleUiLanguage}
       />
 
       <main className="container">
@@ -2272,6 +3065,7 @@ function App() {
           <${HomePage}
             openTeacher=${() => setHash("teacher")}
             openStudent=${() => setHash("student")}
+            t=${t}
           />
         `}
 
@@ -2308,6 +3102,8 @@ function App() {
             onTeacherQuizAnswer=${handleTeacherQuizAnswer}
             statusMessage=${statusMessage}
             statusType=${statusType}
+            t=${t}
+            uiLanguage=${uiLanguage}
           />
         `}
 
@@ -2323,6 +3119,8 @@ function App() {
             studentAnswers=${studentAnswers}
             showStudentScore=${showStudentScore}
             onCheckQuiz=${() => setShowStudentScore(true)}
+            t=${t}
+            uiLanguage=${uiLanguage}
           />
         `}
       </main>
