@@ -1,2 +1,4 @@
 .env.local
+backend/.env
+backend/.venv/
 __pycache__/

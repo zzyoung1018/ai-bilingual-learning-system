@@ -187,10 +187,10 @@ const UI_TEXT = {
     docxBatchedMode:
       "DOCX batched mode: translating structured DOCX blocks in smaller requests. Preview text is display/debug only.",
     generatingTeachingSupport:
-      "Stage 2/2: Generating glossary, explanation, and quiz with local Ollama...",
+      "Stage 2/2: Generating glossary, explanation, and quiz with the online AI model...",
     noStructuredDocxBlocks: "No structured DOCX blocks were found for translation.",
     docxGenerationFallbackUsed: (reason) =>
-      `DOCX generation fallback used. ${reason || "Local Ollama DOCX generation did not fully complete."}`,
+      `DOCX generation fallback used. ${reason || "AI generation did not fully complete."}`,
     docxBatchCompleted: (summary) =>
       `DOCX block translation completed in batches. translated=${summary.translated ?? "?"}, preserved=${summary.preserved ?? "?"}, unchanged=${summary.unchangedAfterTranslate ?? "?"}.`,
     docxBatchedTranslationFailed: (reason) =>
@@ -201,16 +201,16 @@ const UI_TEXT = {
       `Retrying incomplete blocks... Block ${block}/${blockTotal} in batch ${batch}/${batchTotal}`,
     retryingIncompleteBlocks: (count) =>
       `Retrying incomplete blocks... ${count} block(s) need a stricter translation pass.`,
-    translatingLessonContent: "Stage 1/2: Translating document with local Ollama...",
+    translatingLessonContent: "Stage 1/2: Translating document with the online AI model...",
     noTranslationChunks: "No translation chunks were available.",
     experimentalPdfOverlayTranslated:
       " Experimental PDF overlay blocks translated. Verify complex layouts/tables manually.",
-    localOllamaFallbackUsed: (lessonReason, documentReason) =>
-      `Local Ollama fallback used for stability. ${lessonReason || ""} ${documentReason || ""}`.trim(),
+    aiModelFallbackUsed: (lessonReason, documentReason) =>
+      `AI model fallback used for stability. ${lessonReason || ""} ${documentReason || ""}`.trim(),
     aiLearningSupportGenerated: (documentMessage) =>
       `AI learning support package generated successfully.${documentMessage || ""}`,
-    couldNotReachLocalOllama: (reason) =>
-      `Could not reach local Ollama. Local fallback content loaded. ${reason || ""}`.trim(),
+    couldNotReachBackendAi: (reason) =>
+      `Could not reach the backend AI API. Local fallback content loaded. ${reason || ""}`.trim(),
     teacherJsonExported: "Teacher JSON package exported.",
     studentJsonExported: "Student JSON package exported.",
     teacherPdfExported: "Teacher PDF exported.",
@@ -232,7 +232,7 @@ const UI_TEXT = {
       "Loaded latest teacher draft into Student Workspace.",
     localFallbackLessonGenerated: "Local fallback lesson generated.",
     localFallbackUsedReason: "Local fallback used.",
-    lessonSupportFailed: "Local Ollama lesson support failed.",
+    lessonSupportFailed: "AI lesson support failed.",
     docxBlockFailure: "DOCX block failure.",
     unknownBatchError: "Unknown batch error.",
     unknownBlockError: "Unknown block error.",
@@ -244,14 +244,14 @@ const UI_TEXT = {
       `Batch ${batch}/${total} block ${block}/${blockTotal}: ${reason}`,
     docxBatchBlockFailedReason: (batch, total, block, blockTotal, reason) =>
       `Batch ${batch}/${total} block ${block}/${blockTotal} failed: ${reason}`,
-    ollamaEmptyResponse: "Ollama returned an empty response.",
-    ollamaNoJson: "Ollama response did not contain JSON.",
-    ollamaInvalidJson: "Ollama returned invalid response JSON.",
-    ollamaNoContent: "Ollama response did not include message.content.",
-    ollamaConnectionFailed: (reason) =>
-      `Could not connect to local Ollama at ${OLLAMA_CONFIG.baseUrl}. ${reason || ""}`.trim(),
-    ollamaHttpError: (status, body) =>
-      `Ollama HTTP ${status}: ${body || ""}`.trim(),
+    aiEmptyResponse: "AI model returned an empty response.",
+    aiNoJson: "AI model response did not contain JSON.",
+    aiInvalidJson: "AI backend returned invalid response JSON.",
+    aiNoContent: "AI backend response did not include content.",
+    aiConnectionFailed: (reason) =>
+      `Could not connect to the backend AI API at ${MODEL_API_CONFIG.chatUrl}. ${reason || ""}`.trim(),
+    aiHttpError: (status, body) =>
+      `AI backend HTTP ${status}: ${body || ""}`.trim(),
   },
   kk: {
     navOverview: "Шолу",
@@ -427,11 +427,11 @@ const UI_TEXT = {
     docxBatchedMode:
       "DOCX пакеттік режимі: құрылымды DOCX блоктары кішірек сұраулармен аударылып жатыр. Алдын ала көру мәтіні тек көрсету және тексеру үшін қолданылады.",
     generatingTeachingSupport:
-      "2/2 кезең: жергілікті Ollama арқылы глоссарий, түсіндірме және тест жасалып жатыр...",
+      "2/2 кезең: онлайн AI моделі арқылы глоссарий, түсіндірме және тест жасалып жатыр...",
     noStructuredDocxBlocks:
       "Аударма үшін құрылымды DOCX блоктары табылмады.",
     docxGenerationFallbackUsed: (reason) =>
-      `DOCX генерациясында қосалқы режим қолданылды. ${reason || "Жергілікті Ollama арқылы DOCX генерациясы толық аяқталмады."}`,
+      `DOCX генерациясында қосалқы режим қолданылды. ${reason || "AI генерациясы толық аяқталмады."}`,
     docxBatchCompleted: (summary) =>
       `DOCX блоктарын пакеттік аудару аяқталды. аударылды=${summary.translated ?? "?"}, сақталды=${summary.preserved ?? "?"}, өзгеріссіз қалды=${summary.unchangedAfterTranslate ?? "?"}.`,
     docxBatchedTranslationFailed: (reason) =>
@@ -443,16 +443,16 @@ const UI_TEXT = {
     retryingIncompleteBlocks: (count) =>
       `Толық емес блоктар қайта аударылып жатыр... ${count} блокқа қатаң аударма қажет.`,
     translatingLessonContent:
-      "1/2 кезең: құжат жергілікті Ollama арқылы аударылып жатыр...",
+      "1/2 кезең: құжат онлайн AI моделі арқылы аударылып жатыр...",
     noTranslationChunks: "Аудармаға арналған бөліктер табылмады.",
     experimentalPdfOverlayTranslated:
       " PDF қабаттастыру блоктары аударылды. Күрделі кестелер мен макеттерді қолмен тексеріңіз.",
-    localOllamaFallbackUsed: (lessonReason, documentReason) =>
-      `Тұрақтылық үшін жергілікті Ollama қосалқы режимі қолданылды. ${lessonReason || ""} ${documentReason || ""}`.trim(),
+    aiModelFallbackUsed: (lessonReason, documentReason) =>
+      `Тұрақтылық үшін AI моделінің қосалқы режимі қолданылды. ${lessonReason || ""} ${documentReason || ""}`.trim(),
     aiLearningSupportGenerated: (documentMessage) =>
       `AI оқу қолдауы сәтті жасалды.${documentMessage || ""}`,
-    couldNotReachLocalOllama: (reason) =>
-      `Жергілікті Ollama-ға қосылу мүмкін болмады. Жергілікті қосалқы мазмұн жүктелді. ${reason || ""}`.trim(),
+    couldNotReachBackendAi: (reason) =>
+      `Backend AI API-ге қосылу мүмкін болмады. Қосалқы мазмұн жүктелді. ${reason || ""}`.trim(),
     teacherJsonExported: "Мұғалім JSON пакеті экспортталды.",
     studentJsonExported: "Оқушы JSON пакеті экспортталды.",
     teacherPdfExported: "Мұғалім PDF файлы экспортталды.",
@@ -475,7 +475,7 @@ const UI_TEXT = {
     localFallbackLessonGenerated: "Жергілікті қосалқы сабақ жасалды.",
     localFallbackUsedReason: "Жергілікті қосалқы режим қолданылды.",
     lessonSupportFailed:
-      "Жергілікті Ollama арқылы сабаққа қолдау жасау сәтсіз аяқталды.",
+      "AI арқылы сабаққа қолдау жасау сәтсіз аяқталды.",
     docxBlockFailure: "DOCX блогын өңдеу сәтсіз аяқталды.",
     unknownBatchError: "Белгісіз пакет қатесі.",
     unknownBlockError: "Белгісіз блок қатесі.",
@@ -487,14 +487,14 @@ const UI_TEXT = {
       `${batch}/${total} пакеттегі ${block}/${blockTotal} блок: ${reason}`,
     docxBatchBlockFailedReason: (batch, total, block, blockTotal, reason) =>
       `${batch}/${total} пакеттегі ${block}/${blockTotal} блок сәтсіз аяқталды: ${reason}`,
-    ollamaEmptyResponse: "Ollama бос жауап қайтарды.",
-    ollamaNoJson: "Ollama жауабында JSON табылмады.",
-    ollamaInvalidJson: "Ollama жарамсыз JSON жауап қайтарды.",
-    ollamaNoContent: "Ollama жауабында message.content өрісі болмады.",
-    ollamaConnectionFailed: (reason) =>
-      `Жергілікті Ollama-ға ${OLLAMA_CONFIG.baseUrl} мекенжайы бойынша қосылу мүмкін болмады. ${reason || ""}`.trim(),
-    ollamaHttpError: (status, body) =>
-      `Ollama HTTP ${status}: ${body || ""}`.trim(),
+    aiEmptyResponse: "AI моделі бос жауап қайтарды.",
+    aiNoJson: "AI моделі жауабында JSON табылмады.",
+    aiInvalidJson: "Backend AI API жарамсыз JSON жауап қайтарды.",
+    aiNoContent: "Backend AI API жауабында content өрісі болмады.",
+    aiConnectionFailed: (reason) =>
+      `Backend AI API-ге ${MODEL_API_CONFIG.chatUrl} мекенжайы бойынша қосылу мүмкін болмады. ${reason || ""}`.trim(),
+    aiHttpError: (status, body) =>
+      `Backend AI API HTTP ${status}: ${body || ""}`.trim(),
   },
 };
 let runtimeUiLanguage = "en";
@@ -543,24 +543,34 @@ const DOCX_TRANSLATION_BATCH_MAX_CHARS = 2400;
 const DOCX_TRANSLATION_SHORT_BLOCK_MAX_CHARS = 180;
 const DOCX_TRANSLATION_SHORT_BATCH_MAX_BLOCKS = 18;
 const DOCX_TRANSLATION_LONG_BLOCK_MIN_CHARS = 1200;
-const PIPELINE_VERSION = "phase-3-static-ollama-v1";
+const PIPELINE_VERSION = "phase-4a-online-api-proxy-v1";
 const TRANSLATION_PROMPT_VERSION = "stage-a-block-translation-v2";
 const ENRICHMENT_PROMPT_VERSION = "stage-b-teaching-support-v2";
-const CACHE_VERSION = "translation-cache-v2";
-const TRANSLATION_CACHE_STORAGE_KEY = "aiBilingual.translationCache.v2";
+const CACHE_VERSION = "translation-cache-v3";
+const TRANSLATION_CACHE_STORAGE_KEY = "aiBilingual.translationCache.v3";
 const TRANSLATION_CACHE_MAX_ENTRIES = 600;
-const OLLAMA_CONFIG = {
-  baseUrl: "http://127.0.0.1:11434",
-  model: "qwen3:14b",
-  keepAlive: "10m",
+const FRONTEND_DEV_HOSTS = new Set(["localhost:5500", "127.0.0.1:5500"]);
+const API_BASE_URL =
+  typeof window !== "undefined" && typeof window.APP_API_BASE_URL === "string"
+    ? window.APP_API_BASE_URL
+    : typeof window !== "undefined" && FRONTEND_DEV_HOSTS.has(window.location.host)
+    ? "http://127.0.0.1:8000"
+    : "";
+const MODEL_API_CONFIG = {
+  provider: "online-api",
+  baseUrl: API_BASE_URL.replace(/\/$/, ""),
+  chatUrl: `${API_BASE_URL.replace(/\/$/, "")}/api/llm/chat`,
+  translationModel: "gpt-5.5",
+  enrichmentModel: "gpt-5.4-pro",
+  repairModel: "gpt-5.4-pro",
 };
-const OLLAMA_TRANSLATION_OPTIONS = {
+const MODEL_TRANSLATION_OPTIONS = {
   temperature: 0.3,
   top_p: 0.8,
   top_k: 20,
   min_p: 0,
 };
-const OLLAMA_ENRICHMENT_OPTIONS = {
+const MODEL_ENRICHMENT_OPTIONS = {
   temperature: 0.6,
   top_p: 0.95,
   top_k: 20,
@@ -669,7 +679,7 @@ function estimateTranslationNumPredict(blocks) {
 
 function buildTranslationOptions(blocks, overrides = {}) {
   return {
-    ...OLLAMA_TRANSLATION_OPTIONS,
+    ...MODEL_TRANSLATION_OPTIONS,
     num_predict: estimateTranslationNumPredict(blocks),
     ...overrides,
   };
@@ -734,7 +744,7 @@ function buildTranslationCacheKey({ block, targetLanguage, preserveFormulas }) {
     cacheVersion: CACHE_VERSION,
     pipelineVersion: PIPELINE_VERSION,
     translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-    model: OLLAMA_CONFIG.model,
+    model: MODEL_API_CONFIG.translationModel,
     targetLanguage,
     preserveFlag: getTranslationPreserveFlag(block, preserveFormulas),
     sourceText: normalizedText,
@@ -747,7 +757,7 @@ function isValidTranslationCacheEntry(entry) {
     typeof entry === "object" &&
     entry.cacheVersion === CACHE_VERSION &&
     entry.translationPromptVersion === TRANSLATION_PROMPT_VERSION &&
-    entry.model === OLLAMA_CONFIG.model &&
+    entry.model === MODEL_API_CONFIG.translationModel &&
     entry.action === "translate" &&
     typeof entry.translatedText === "string" &&
     entry.translatedText.trim()
@@ -935,7 +945,7 @@ function mergeTranslationWorkResult({
       apiResult.translationsById?.[primaryBlock.id] || primaryBlock.text || ""
     ).trim();
     const action = String(primaryEntry.action || "translate").trim().toLowerCase();
-    const reason = String(primaryEntry.reason || "ollama");
+    const reason = String(primaryEntry.reason || "online_api");
 
     group.members.forEach((member) => {
       const validationReasons = validateTranslatedBlock({
@@ -962,7 +972,7 @@ function mergeTranslationWorkResult({
         block: member.block,
         index: member.index,
         targetLanguage,
-        apiAction: isPrimary ? "ollama" : "dedupe_reuse",
+        apiAction: isPrimary ? "online_api" : "dedupe_reuse",
         action,
         reason: isPrimary ? reason : `dedupe_reuse:${reason}`,
         translatedText,
@@ -987,7 +997,7 @@ function mergeTranslationWorkResult({
         cacheVersion: CACHE_VERSION,
         pipelineVersion: PIPELINE_VERSION,
         translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-        model: OLLAMA_CONFIG.model,
+        model: MODEL_API_CONFIG.translationModel,
         targetLanguage,
         action: "translate",
         reason,
@@ -1003,8 +1013,8 @@ function mergeTranslationWorkResult({
     meta: {
       usedFallback: false,
       reason: "",
-      provider: "ollama",
-      model: OLLAMA_CONFIG.model,
+      provider: MODEL_API_CONFIG.provider,
+      model: MODEL_API_CONFIG.translationModel,
       pipelineVersion: PIPELINE_VERSION,
       translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       responseItemCount: apiResult.meta?.responseItemCount || 0,
@@ -1168,7 +1178,7 @@ function extractJsonPayload(content) {
   const t = getRuntimeUiText();
   let text = stripModelThinking(content);
   if (!text) {
-    throw new Error(t.ollamaEmptyResponse);
+    throw new Error(t.aiEmptyResponse);
   }
 
   if (text.startsWith("```")) {
@@ -1193,29 +1203,24 @@ function extractJsonPayload(content) {
         : arrayCandidate;
 
     if (!candidate) {
-      throw new Error(t.ollamaNoJson);
+      throw new Error(t.aiNoJson);
     }
     return JSON.parse(candidate);
   }
 }
 
-async function callOllamaChat(messages, { think, options, format, signal }) {
+async function callModelChat(messages, { stage, options, format, signal }) {
   const t = getRuntimeUiText();
   let response;
   throwIfGenerationCancelled({ signal });
   const requestBody = {
-    model: OLLAMA_CONFIG.model,
+    stage,
     messages,
-    stream: false,
-    think,
-    keep_alive: OLLAMA_CONFIG.keepAlive,
+    format: format === "json" ? "json" : "text",
     options,
   };
-  if (format) {
-    requestBody.format = format;
-  }
   try {
-    response = await fetch(`${OLLAMA_CONFIG.baseUrl}/api/chat`, {
+    response = await fetch(MODEL_API_CONFIG.chatUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody),
@@ -1225,20 +1230,20 @@ async function callOllamaChat(messages, { think, options, format, signal }) {
     if (isGenerationCancelledError(err)) {
       throw createGenerationCancelledError();
     }
-    throw new Error(t.ollamaConnectionFailed(err?.message || ""));
+    throw new Error(t.aiConnectionFailed(err?.message || ""));
   }
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(t.ollamaHttpError(response.status, body.slice(0, 400) || response.statusText));
+    throw new Error(t.aiHttpError(response.status, body.slice(0, 400) || response.statusText));
   }
 
   const data = await response.json().catch(() => {
-    throw new Error(t.ollamaInvalidJson);
+    throw new Error(t.aiInvalidJson);
   });
-  const content = data?.message?.content;
+  const content = data?.content;
   if (typeof content !== "string") {
-    throw new Error(t.ollamaNoContent);
+    throw new Error(t.aiNoContent);
   }
   return content;
 }
@@ -1406,18 +1411,18 @@ function buildEnrichmentJsonRepairMessages(malformedJson) {
   ];
 }
 
-function isEmptyOllamaOutputError(err) {
+function isEmptyModelOutputError(err) {
   const message = String(err?.message || "");
-  return message === getRuntimeUiText().ollamaEmptyResponse;
+  return message === getRuntimeUiText().aiEmptyResponse;
 }
 
 function warnEnrichmentParseFailure(label, err) {
   if (typeof console !== "undefined") {
-    console.warn(`[Ollama enrichment] ${label}`, err);
+    console.warn(`[AI enrichment] ${label}`, err);
   }
 }
 
-async function generateTeachingSupportWithOllama(fallbackInput, translation, runContext = null) {
+async function generateTeachingSupportWithModel(fallbackInput, translation, runContext = null) {
   throwIfGenerationCancelled(runContext);
   const messages = buildLessonEnrichmentMessages({
     ...fallbackInput,
@@ -1426,9 +1431,9 @@ async function generateTeachingSupportWithOllama(fallbackInput, translation, run
   let parsed;
   let malformedContent = "";
   try {
-    const content = await callOllamaChat(messages, {
-      think: true,
-      options: OLLAMA_ENRICHMENT_OPTIONS,
+    const content = await callModelChat(messages, {
+      stage: "enrichment",
+      options: MODEL_ENRICHMENT_OPTIONS,
       format: "json",
       signal: runContext?.signal,
     });
@@ -1437,11 +1442,11 @@ async function generateTeachingSupportWithOllama(fallbackInput, translation, run
     parsed = extractJsonPayload(content);
   } catch (err) {
     if (isGenerationCancelledError(err)) throw err;
-    warnEnrichmentParseFailure("think:true output could not be parsed; retrying with think:false.", err);
+    warnEnrichmentParseFailure("initial output could not be parsed; retrying once.", err);
     try {
-      const retryContent = await callOllamaChat(messages, {
-        think: false,
-        options: OLLAMA_ENRICHMENT_OPTIONS,
+      const retryContent = await callModelChat(messages, {
+        stage: "enrichment",
+        options: MODEL_ENRICHMENT_OPTIONS,
         format: "json",
         signal: runContext?.signal,
       });
@@ -1450,21 +1455,21 @@ async function generateTeachingSupportWithOllama(fallbackInput, translation, run
       parsed = extractJsonPayload(retryContent);
     } catch (retryErr) {
       if (isGenerationCancelledError(retryErr)) throw retryErr;
-      warnEnrichmentParseFailure("think:false output could not be parsed; trying JSON repair.", retryErr);
+      warnEnrichmentParseFailure("retry output could not be parsed; trying JSON repair.", retryErr);
       if (typeof console !== "undefined") {
-        console.warn("[Ollama enrichment] JSON repair retry is being used.");
+        console.warn("[AI enrichment] JSON repair retry is being used.");
       }
-      if (!malformedContent && isEmptyOllamaOutputError(err)) {
+      if (!malformedContent && isEmptyModelOutputError(err)) {
         malformedContent = "";
       }
       if (!malformedContent) {
         throw retryErr;
       }
-      const repairedContent = await callOllamaChat(
+      const repairedContent = await callModelChat(
         buildEnrichmentJsonRepairMessages(malformedContent),
         {
-          think: false,
-          options: OLLAMA_ENRICHMENT_OPTIONS,
+          stage: "json_repair",
+          options: MODEL_ENRICHMENT_OPTIONS,
           format: "json",
           signal: runContext?.signal,
         }
@@ -1475,7 +1480,7 @@ async function generateTeachingSupportWithOllama(fallbackInput, translation, run
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(getRuntimeUiText().ollamaNoJson);
+    throw new Error(getRuntimeUiText().aiNoJson);
   }
 
   return {
@@ -1487,8 +1492,8 @@ async function generateTeachingSupportWithOllama(fallbackInput, translation, run
       ...(parsed.meta || {}),
       usedFallback: false,
       reason: "",
-      provider: "ollama",
-      model: OLLAMA_CONFIG.model,
+      provider: MODEL_API_CONFIG.provider,
+      model: MODEL_API_CONFIG.enrichmentModel,
       pipelineVersion: PIPELINE_VERSION,
       enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
     },
@@ -1720,7 +1725,7 @@ function validateTranslatedBlock({ block, translatedText, action, targetLanguage
   return reasons;
 }
 
-async function translateBlocksWithOllama({
+async function translateBlocksWithModel({
   blocks,
   targetLanguage,
   mode,
@@ -1736,9 +1741,10 @@ async function translateBlocksWithOllama({
     preserveFormulas,
     strictRetry,
   });
-  const content = await callOllamaChat(messages, {
-    think: false,
+  const content = await callModelChat(messages, {
+    stage: "translation",
     options: buildTranslationOptions(blocks, strictRetry ? { temperature: 0.2 } : {}),
+    format: "json",
     signal,
   });
   throwIfGenerationCancelled({ signal });
@@ -1746,7 +1752,7 @@ async function translateBlocksWithOllama({
   const list = Array.isArray(parsed?.translations) ? parsed.translations : [];
 
   if (list.length === 0) {
-    throw new Error(getRuntimeUiText().ollamaNoJson);
+    throw new Error(getRuntimeUiText().aiNoJson);
   }
 
   const byId = new Map(
@@ -1764,7 +1770,7 @@ async function translateBlocksWithOllama({
     const rawById = byId.get(String(block.id || ""));
     const raw = rawById || list[index];
     if (!raw || typeof raw !== "object") {
-      throw new Error(getRuntimeUiText().ollamaNoJson);
+      throw new Error(getRuntimeUiText().aiNoJson);
     }
     const idMatched =
       Boolean(rawById) || String(raw.id || "") === String(block.id || "");
@@ -1781,7 +1787,7 @@ async function translateBlocksWithOllama({
       action === "preserve" || forcePreserve ? sourceText : translatedText || sourceText;
 
     if (action !== "preserve" && !translatedText) {
-      throw new Error(getRuntimeUiText().ollamaEmptyResponse);
+      throw new Error(getRuntimeUiText().aiEmptyResponse);
     }
 
     const validationReasons = validateTranslatedBlock({
@@ -1820,9 +1826,9 @@ async function translateBlocksWithOllama({
       sourceLocation: block.sourceLocation || block.id || "",
       targetLanguage,
       sourceText,
-      apiAction: "ollama",
+      apiAction: "online_api",
       action: forcePreserve ? "preserve" : action,
-      reason: forcePreserve ? "frontend_formula_preserve" : String(raw.reason || "ollama"),
+      reason: forcePreserve ? "frontend_formula_preserve" : String(raw.reason || "online_api"),
       validationReasons,
       needsRetry: validationReasons.length > 0,
       translatedText: finalText,
@@ -1836,8 +1842,8 @@ async function translateBlocksWithOllama({
     meta: {
       usedFallback: false,
       reason: "",
-      provider: "ollama",
-      model: OLLAMA_CONFIG.model,
+      provider: MODEL_API_CONFIG.provider,
+      model: MODEL_API_CONFIG.translationModel,
       pipelineVersion: PIPELINE_VERSION,
       translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       responseItemCount,
@@ -2431,8 +2437,11 @@ function buildDebugReport({
     translationPromptVersion: TRANSLATION_PROMPT_VERSION,
     enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
     cacheVersion: CACHE_VERSION,
-    modelName: OLLAMA_CONFIG.model,
-    ollamaBaseUrl: OLLAMA_CONFIG.baseUrl,
+    provider: MODEL_API_CONFIG.provider,
+    translationModel: MODEL_API_CONFIG.translationModel,
+    enrichmentModel: MODEL_API_CONFIG.enrichmentModel,
+    repairModel: MODEL_API_CONFIG.repairModel,
+    backendApiBaseUrl: MODEL_API_CONFIG.baseUrl || window.location.origin,
     lessonTitle: lesson?.lessonTitle || "",
     targetLanguage: lesson?.targetLanguage || "",
     sourceType: assets.sourceType || "text",
@@ -3499,7 +3508,7 @@ function App() {
           usedFallback: false,
           reason: "",
           provider: "cache",
-          model: OLLAMA_CONFIG.model,
+          model: MODEL_API_CONFIG.translationModel,
           pipelineVersion: PIPELINE_VERSION,
           translationPromptVersion: TRANSLATION_PROMPT_VERSION,
           debugSummary: plan.debugSummary,
@@ -3516,7 +3525,7 @@ function App() {
     } else {
       try {
         assertActiveGenerationRun(runContext);
-        const apiResult = await translateBlocksWithOllama({
+        const apiResult = await translateBlocksWithModel({
           ...requestPayload,
           blocks: plan.uniqueBlocks,
           signal: runContext?.signal,
@@ -3537,8 +3546,8 @@ function App() {
           meta: {
             usedFallback: false,
             reason: `batch_translation_failed:${initialErr?.message || t.unknownBatchError}`,
-            provider: "ollama",
-            model: OLLAMA_CONFIG.model,
+            provider: MODEL_API_CONFIG.provider,
+            model: MODEL_API_CONFIG.translationModel,
             pipelineVersion: PIPELINE_VERSION,
             translationPromptVersion: TRANSLATION_PROMPT_VERSION,
             debugSummary: plan.debugSummary,
@@ -3598,7 +3607,7 @@ function App() {
           label: t.retryingIncompleteBlocksProgress,
         }, runContext);
         try {
-          const retryResult = await translateBlocksWithOllama({
+          const retryResult = await translateBlocksWithModel({
             ...requestPayload,
             blocks: [block],
             strictRetry: true,
@@ -3638,10 +3647,10 @@ function App() {
                 cacheVersion: CACHE_VERSION,
                 pipelineVersion: PIPELINE_VERSION,
                 translationPromptVersion: TRANSLATION_PROMPT_VERSION,
-                model: OLLAMA_CONFIG.model,
+                model: MODEL_API_CONFIG.translationModel,
                 targetLanguage,
                 action: "translate",
-                reason: retryEntry.reason || "ollama_strict_retry",
+                reason: retryEntry.reason || "online_api_strict_retry",
                 translatedText: result.translationsById[block.id],
                 createdAt: Date.now(),
               };
@@ -3657,8 +3666,8 @@ function App() {
           result.meta.debugEntries.push(
             ...retryEntries.map((entry) => ({
               ...entry,
-              apiAction: "ollama_strict_retry",
-              reason: `strict_retry_success: ${entry.reason || "ollama"}`,
+              apiAction: "online_api_strict_retry",
+              reason: `strict_retry_success: ${entry.reason || "online_api"}`,
             }))
           );
         } catch (retryErr) {
@@ -3892,8 +3901,8 @@ function App() {
     const meta = {
       usedFallback,
       reason: mergeReasonList(aggregatedReasons),
-      provider: "ollama",
-      model: OLLAMA_CONFIG.model,
+      provider: MODEL_API_CONFIG.provider,
+      model: MODEL_API_CONFIG.translationModel,
       pipelineVersion: PIPELINE_VERSION,
       translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       debugEntries: aggregatedDebugEntries,
@@ -3950,7 +3959,7 @@ function App() {
       setGenerationStatus("info", t.docxBatchedMode, runContext);
       if (typeof console !== "undefined") {
         console.info(
-          "[DOCX Batched Path] Preview text is not used as translation input. Lesson support uses local Ollama."
+          "[DOCX Batched Path] Preview text is not used as translation input. Lesson support uses the backend AI API."
         );
       }
       try {
@@ -3978,7 +3987,7 @@ function App() {
             percent: 88,
             label: t.generatingGlossaryQuiz,
           }, runContext);
-          const aiPayload = await generateTeachingSupportWithOllama(
+          const aiPayload = await generateTeachingSupportWithModel(
             fallbackInput,
             combinedTranslation,
             runContext
@@ -4106,7 +4115,7 @@ function App() {
       assertActiveGenerationRun(runContext);
       if (typeof console !== "undefined") {
         console.info(
-          `[Non-DOCX Path] sourceType=${documentContext.sourceType || "text"} using local Ollama.`
+          `[Non-DOCX Path] sourceType=${documentContext.sourceType || "text"} using the backend AI API.`
         );
       }
       setGenerationStatus("info", t.translatingLessonContent, runContext);
@@ -4155,7 +4164,7 @@ function App() {
       let lessonBase;
       let lessonMeta = { usedFallback: false, reason: "" };
       try {
-        const payload = await generateTeachingSupportWithOllama(
+        const payload = await generateTeachingSupportWithModel(
           fallbackInput,
           completedTranslation,
           runContext
@@ -4213,7 +4222,7 @@ function App() {
       if (lessonMeta?.usedFallback || documentMeta?.usedFallback) {
         setGenerationStatus(
           "error",
-          t.localOllamaFallbackUsed(lessonMeta.reason || "", documentMeta.reason || ""),
+          t.aiModelFallbackUsed(lessonMeta.reason || "", documentMeta.reason || ""),
           runContext
         );
         markGenerationProgressError(runContext);
@@ -4262,7 +4271,7 @@ function App() {
         enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
         cacheVersion: CACHE_VERSION,
       });
-      setGenerationStatus("error", t.couldNotReachLocalOllama(err?.message || ""), runContext);
+      setGenerationStatus("error", t.couldNotReachBackendAi(err?.message || ""), runContext);
       markGenerationProgressError(runContext);
     } finally {
       if (generationRunRef.current.id === runContext.id) {
