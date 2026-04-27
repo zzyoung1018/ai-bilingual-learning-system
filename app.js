@@ -1,5 +1,5 @@
 ﻿
-import React, { useEffect, useMemo, useState } from "https://esm.sh/react@18.2.0";
+import React, { useEffect, useMemo, useRef, useState } from "https://esm.sh/react@18.2.0";
 import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
 import htm from "https://esm.sh/htm@3.1.1";
 import {
@@ -99,12 +99,20 @@ const UI_TEXT = {
       "Paste lesson text here, or upload a PDF / DOCX and edit extracted content.",
     generateAiLearningSupport: "Generate AI Learning Support",
     generatingAiLearningSupport: "Generating AI Learning Support...",
+    cancelGeneration: "Cancel",
+    clearTranslationCache: "Clear Translation Cache",
     translationProgress: "Translation progress",
     preparingTranslation: "Preparing translation...",
     translatingBatchProgress: (current, total) => `Translating batch ${current}/${total}`,
+    translatingUniqueBlocks: (unique, total) =>
+      `Translating ${unique}/${total} unique block(s)`,
+    usingCachedTranslations: (count, total) =>
+      `Using cached translations for ${count}/${total} block(s)`,
     retryingIncompleteBlocksProgress: "Retrying incomplete blocks...",
     generatingGlossaryQuiz: "Generating glossary and quiz...",
     progressComplete: "Complete",
+    generationCancelled: "Generation cancelled.",
+    translationCacheCleared: "Translation cache cleared.",
     exportTranslatedDocxRecommended: "Export Translated DOCX (Recommended)",
     exportLearningPackageTeacherJson: "Export Learning Package (Teacher JSON)",
     exportLearningPackageStudentJson: "Export Learning Package (Student JSON)",
@@ -323,14 +331,22 @@ const UI_TEXT = {
       "Сабақ мәтінін осы жерге қойыңыз немесе PDF / DOCX жүктеп, алынған мазмұнды өңдеңіз.",
     generateAiLearningSupport: "AI оқу қолдауын жасау",
     generatingAiLearningSupport: "AI оқу қолдауы жасалып жатыр...",
+    cancelGeneration: "Бас тарту",
+    clearTranslationCache: "Аударма кэшін тазалау",
     translationProgress: "Аударма барысы",
     preparingTranslation: "Аударма дайындалып жатыр...",
     translatingBatchProgress: (current, total) =>
       `Пакет аударылып жатыр: ${current}/${total}`,
+    translatingUniqueBlocks: (unique, total) =>
+      `${total} блоктың ${unique} бірегей блогы аударылып жатыр`,
+    usingCachedTranslations: (count, total) =>
+      `${total} блоктың ${count} блогы үшін кэштегі аударма қолданылып жатыр`,
     retryingIncompleteBlocksProgress:
       "Толық аударылмаған блоктар қайта өңделіп жатыр...",
     generatingGlossaryQuiz: "Глоссарий мен тест жасалып жатыр...",
     progressComplete: "Аяқталды",
+    generationCancelled: "Генерация тоқтатылды.",
+    translationCacheCleared: "Аударма кэші тазартылды.",
     exportTranslatedDocxRecommended: "Аударылған DOCX файлын экспорттау (ұсынылады)",
     exportLearningPackageTeacherJson:
       "Сабақ пакетін экспорттау (мұғалім JSON)",
@@ -518,8 +534,14 @@ const defaultGenerationProgress = {
   label: "",
 };
 
-const DOCX_TRANSLATION_BATCH_MAX_BLOCKS = 6;
-const DOCX_TRANSLATION_BATCH_MAX_CHARS = 1800;
+const DOCX_TRANSLATION_BATCH_MAX_BLOCKS = 10;
+const DOCX_TRANSLATION_BATCH_MAX_CHARS = 2400;
+const DOCX_TRANSLATION_SHORT_BLOCK_MAX_CHARS = 180;
+const DOCX_TRANSLATION_SHORT_BATCH_MAX_BLOCKS = 18;
+const DOCX_TRANSLATION_LONG_BLOCK_MIN_CHARS = 1200;
+const TRANSLATION_PROMPT_VERSION = "stage-a-block-translation-v2";
+const TRANSLATION_CACHE_STORAGE_KEY = "aiBilingual.translationCache.v1";
+const TRANSLATION_CACHE_MAX_ENTRIES = 600;
 const OLLAMA_CONFIG = {
   baseUrl: "http://127.0.0.1:11434",
   model: "qwen3:14b",
@@ -640,6 +662,347 @@ function buildTranslationOptions(blocks, overrides = {}) {
     ...OLLAMA_TRANSLATION_OPTIONS,
     num_predict: estimateTranslationNumPredict(blocks),
     ...overrides,
+  };
+}
+
+function createGenerationCancelledError() {
+  const err = new Error("generation_cancelled");
+  err.name = "GenerationCancelledError";
+  return err;
+}
+
+function isGenerationCancelledError(err) {
+  return err?.name === "GenerationCancelledError" || err?.name === "AbortError";
+}
+
+function throwIfGenerationCancelled(runContext) {
+  if (runContext?.signal?.aborted) {
+    throw createGenerationCancelledError();
+  }
+}
+
+function readTranslationCache() {
+  try {
+    const raw = window.localStorage.getItem(TRANSLATION_CACHE_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch (_err) {
+    return {};
+  }
+}
+
+function writeTranslationCache(cache) {
+  try {
+    const entries = Object.entries(cache || {});
+    entries.sort((a, b) => Number(b[1]?.createdAt || 0) - Number(a[1]?.createdAt || 0));
+    const trimmed = Object.fromEntries(entries.slice(0, TRANSLATION_CACHE_MAX_ENTRIES));
+    window.localStorage.setItem(TRANSLATION_CACHE_STORAGE_KEY, JSON.stringify(trimmed));
+  } catch (_err) {
+    // localStorage may be unavailable or full. Translation still continues.
+  }
+}
+
+function clearTranslationCacheStorage() {
+  try {
+    window.localStorage.removeItem(TRANSLATION_CACHE_STORAGE_KEY);
+  } catch (_err) {
+    // Ignore localStorage failures.
+  }
+}
+
+function getTranslationPreserveFlag(block, preserveFormulas) {
+  if (Boolean(block?.isFormula)) {
+    return preserveFormulas ? "formula_preserved" : "formula_translatable";
+  }
+  return shouldTranslateBlock(block) ? "translate" : "preserve_candidate";
+}
+
+function buildTranslationCacheKey({ block, targetLanguage, preserveFormulas }) {
+  const normalizedText = normalizeForComparison(block?.text);
+  if (!normalizedText) return "";
+  return JSON.stringify({
+    version: TRANSLATION_PROMPT_VERSION,
+    model: OLLAMA_CONFIG.model,
+    targetLanguage,
+    preserveFlag: getTranslationPreserveFlag(block, preserveFormulas),
+    sourceText: normalizedText,
+  });
+}
+
+function isValidTranslationCacheEntry(entry) {
+  return Boolean(
+    entry &&
+    typeof entry === "object" &&
+    entry.version === TRANSLATION_PROMPT_VERSION &&
+    entry.model === OLLAMA_CONFIG.model &&
+    entry.action === "translate" &&
+    typeof entry.translatedText === "string" &&
+    entry.translatedText.trim()
+  );
+}
+
+function isCacheableTranslationResult({ block, translatedText, action, validationReasons, targetLanguage }) {
+  const finalText = String(translatedText || "").trim();
+  if (String(action || "").toLowerCase() === "preserve") return false;
+  if (!finalText) return false;
+  if (!shouldTranslateBlock(block)) return false;
+  if (Array.isArray(validationReasons) && validationReasons.length > 0) return false;
+  if (
+    targetLanguage !== "English" &&
+    normalizeForComparison(block?.text) === normalizeForComparison(finalText)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function createTranslationDebugEntry({
+  block,
+  index = 0,
+  targetLanguage,
+  apiAction,
+  action,
+  reason,
+  translatedText,
+  validationReasons = [],
+}) {
+  const sourceText = String(block?.text || "");
+  return {
+    index,
+    id: block?.id || `block-${index}`,
+    blockType: block?.blockType || "",
+    sourceLocation: block?.sourceLocation || block?.id || `block-${index}`,
+    targetLanguage,
+    sourceText,
+    apiAction,
+    action,
+    reason,
+    validationReasons,
+    needsRetry: validationReasons.length > 0,
+    translatedText: String(translatedText || ""),
+    textPreview: sourceText.slice(0, 140),
+    frontendFlagIsFormula: Boolean(block?.isFormula),
+  };
+}
+
+function buildDebugEntryIndex(entries) {
+  const map = {};
+  if (!Array.isArray(entries)) return map;
+  entries.forEach((entry) => {
+    const id = String(entry?.id || "").trim();
+    if (id) map[id] = entry;
+  });
+  return map;
+}
+
+function addTranslationDebugCount(summary, entry) {
+  summary.total += 1;
+  if (entry.action === "preserve") {
+    summary.preserved += 1;
+  } else {
+    summary.translated += 1;
+    if (normalizeForComparison(entry.sourceText) === normalizeForComparison(entry.translatedText)) {
+      summary.unchangedAfterTranslate += 1;
+    }
+  }
+  if (Array.isArray(entry.validationReasons) && entry.validationReasons.length > 0) {
+    summary.suspicious += 1;
+  }
+}
+
+function buildTranslationWorkPlan({ blocks, targetLanguage, preserveFormulas, cache }) {
+  const translationsById = {};
+  const debugEntries = [];
+  const debugSummary = createEmptyDebugSummary();
+  const groups = [];
+  const groupsByKey = new Map();
+  const retryableIds = new Set();
+  let cacheHits = 0;
+  let dedupeReused = 0;
+  let locallyPreserved = 0;
+
+  blocks.forEach((block, index) => {
+    const sourceText = String(block?.text || "");
+    const normalizedText = normalizeForComparison(sourceText);
+    const forcePreserve = Boolean(preserveFormulas && block?.isFormula);
+
+    if (!normalizedText || forcePreserve) {
+      const entry = createTranslationDebugEntry({
+        block,
+        index,
+        targetLanguage,
+        apiAction: forcePreserve ? "frontend_preserve" : "frontend_empty",
+        action: "preserve",
+        reason: forcePreserve ? "frontend_formula_preserve" : "empty_block",
+        translatedText: sourceText,
+      });
+      translationsById[block.id] = sourceText;
+      debugEntries.push(entry);
+      addTranslationDebugCount(debugSummary, entry);
+      locallyPreserved += 1;
+      return;
+    }
+
+    const cacheKey = buildTranslationCacheKey({ block, targetLanguage, preserveFormulas });
+    const cached = cacheKey ? cache?.[cacheKey] : null;
+    if (isValidTranslationCacheEntry(cached)) {
+      const translatedText = String(cached.translatedText || "").trim();
+      const validationReasons = validateTranslatedBlock({
+        block,
+        translatedText,
+        action: "translate",
+        targetLanguage,
+      });
+      if (validationReasons.length === 0) {
+        const entry = createTranslationDebugEntry({
+          block,
+          index,
+          targetLanguage,
+          apiAction: "cache",
+          action: "translate",
+          reason: "translation_cache_hit",
+          translatedText,
+        });
+        translationsById[block.id] = translatedText;
+        debugEntries.push(entry);
+        addTranslationDebugCount(debugSummary, entry);
+        cacheHits += 1;
+        return;
+      }
+    }
+
+    let group = groupsByKey.get(cacheKey);
+    if (!group) {
+      group = {
+        cacheKey,
+        primaryBlock: block,
+        primaryIndex: index,
+        members: [],
+      };
+      groupsByKey.set(cacheKey, group);
+      groups.push(group);
+    } else {
+      dedupeReused += 1;
+    }
+    group.members.push({ block, index });
+    retryableIds.add(String(block.id || ""));
+  });
+
+  return {
+    translationsById,
+    debugEntries,
+    debugSummary,
+    groups,
+    uniqueBlocks: groups.map((group) => group.primaryBlock),
+    retryableIds,
+    cacheHits,
+    dedupeReused,
+    locallyPreserved,
+  };
+}
+
+function mergeTranslationWorkResult({
+  plan,
+  apiResult,
+  targetLanguage,
+  cache,
+  cacheChangedRef,
+}) {
+  const translationsById = { ...plan.translationsById };
+  const debugEntries = [...plan.debugEntries];
+  const debugSummary = createEmptyDebugSummary();
+  accumulateDebugSummary(debugSummary, plan.debugSummary);
+  const suspiciousBlocks = [];
+  const apiDebugById = buildDebugEntryIndex(apiResult.meta?.debugEntries);
+
+  plan.groups.forEach((group) => {
+    const primaryBlock = group.primaryBlock;
+    const primaryEntry = apiDebugById[primaryBlock.id] || {};
+    const translatedText = String(
+      apiResult.translationsById?.[primaryBlock.id] || primaryBlock.text || ""
+    ).trim();
+    const action = String(primaryEntry.action || "translate").trim().toLowerCase();
+    const reason = String(primaryEntry.reason || "ollama");
+
+    group.members.forEach((member) => {
+      const validationReasons = validateTranslatedBlock({
+        block: member.block,
+        translatedText,
+        action,
+        targetLanguage,
+      });
+      if (Array.isArray(primaryEntry.validationReasons)) {
+        primaryEntry.validationReasons.forEach((item) => {
+          if (!validationReasons.includes(item)) validationReasons.push(item);
+        });
+      }
+      if (validationReasons.length > 0) {
+        suspiciousBlocks.push({
+          id: member.block.id,
+          index: member.index,
+          reasons: validationReasons,
+        });
+      }
+
+      const isPrimary = member.block.id === primaryBlock.id;
+      const entry = createTranslationDebugEntry({
+        block: member.block,
+        index: member.index,
+        targetLanguage,
+        apiAction: isPrimary ? "ollama" : "dedupe_reuse",
+        action,
+        reason: isPrimary ? reason : `dedupe_reuse:${reason}`,
+        translatedText,
+        validationReasons,
+      });
+      translationsById[member.block.id] = translatedText || member.block.text;
+      debugEntries.push(entry);
+      addTranslationDebugCount(debugSummary, entry);
+    });
+
+    if (
+      group.cacheKey &&
+      isCacheableTranslationResult({
+        block: primaryBlock,
+        translatedText,
+        action,
+        validationReasons: primaryEntry.validationReasons || [],
+        targetLanguage,
+      })
+    ) {
+      cache[group.cacheKey] = {
+        version: TRANSLATION_PROMPT_VERSION,
+        model: OLLAMA_CONFIG.model,
+        targetLanguage,
+        action: "translate",
+        reason,
+        translatedText,
+        createdAt: Date.now(),
+      };
+      cacheChangedRef.changed = true;
+    }
+  });
+
+  return {
+    translationsById,
+    meta: {
+      usedFallback: false,
+      reason: "",
+      provider: "ollama",
+      model: OLLAMA_CONFIG.model,
+      responseItemCount: apiResult.meta?.responseItemCount || 0,
+      expectedItemCount: plan.uniqueBlocks.length,
+      itemCountMismatch: Boolean(apiResult.meta?.itemCountMismatch),
+      suspiciousBlocks,
+      debugSummary,
+      debugEntries,
+      cacheSummary: {
+        hits: plan.cacheHits,
+        dedupeReused: plan.dedupeReused,
+        locallyPreserved: plan.locallyPreserved,
+        uniqueRequested: plan.uniqueBlocks.length,
+      },
+    },
   };
 }
 
@@ -815,9 +1178,10 @@ function extractJsonPayload(content) {
   }
 }
 
-async function callOllamaChat(messages, { think, options, format }) {
+async function callOllamaChat(messages, { think, options, format, signal }) {
   const t = getRuntimeUiText();
   let response;
+  throwIfGenerationCancelled({ signal });
   const requestBody = {
     model: OLLAMA_CONFIG.model,
     messages,
@@ -834,8 +1198,12 @@ async function callOllamaChat(messages, { think, options, format }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody),
+      signal,
     });
   } catch (err) {
+    if (isGenerationCancelledError(err)) {
+      throw createGenerationCancelledError();
+    }
     throw new Error(t.ollamaConnectionFailed(err?.message || ""));
   }
 
@@ -925,7 +1293,8 @@ function warnEnrichmentParseFailure(label, err) {
   }
 }
 
-async function generateTeachingSupportWithOllama(fallbackInput, translation) {
+async function generateTeachingSupportWithOllama(fallbackInput, translation, runContext = null) {
+  throwIfGenerationCancelled(runContext);
   const messages = buildLessonEnrichmentMessages({
     ...fallbackInput,
     translation,
@@ -937,20 +1306,26 @@ async function generateTeachingSupportWithOllama(fallbackInput, translation) {
       think: true,
       options: OLLAMA_ENRICHMENT_OPTIONS,
       format: "json",
+      signal: runContext?.signal,
     });
+    throwIfGenerationCancelled(runContext);
     malformedContent = content;
     parsed = extractJsonPayload(content);
   } catch (err) {
+    if (isGenerationCancelledError(err)) throw err;
     warnEnrichmentParseFailure("think:true output could not be parsed; retrying with think:false.", err);
     try {
       const retryContent = await callOllamaChat(messages, {
         think: false,
         options: OLLAMA_ENRICHMENT_OPTIONS,
         format: "json",
+        signal: runContext?.signal,
       });
+      throwIfGenerationCancelled(runContext);
       malformedContent = retryContent;
       parsed = extractJsonPayload(retryContent);
     } catch (retryErr) {
+      if (isGenerationCancelledError(retryErr)) throw retryErr;
       warnEnrichmentParseFailure("think:false output could not be parsed; trying JSON repair.", retryErr);
       if (typeof console !== "undefined") {
         console.warn("[Ollama enrichment] JSON repair retry is being used.");
@@ -967,8 +1342,10 @@ async function generateTeachingSupportWithOllama(fallbackInput, translation) {
           think: false,
           options: OLLAMA_ENRICHMENT_OPTIONS,
           format: "json",
+          signal: runContext?.signal,
         }
       );
+      throwIfGenerationCancelled(runContext);
       parsed = extractJsonPayload(repairedContent);
     }
   }
@@ -1177,7 +1554,9 @@ async function translateBlocksWithOllama({
   mode,
   preserveFormulas,
   strictRetry = false,
+  signal,
 }) {
+  throwIfGenerationCancelled({ signal });
   const messages = buildBlockTranslationMessages({
     blocks,
     targetLanguage,
@@ -1188,7 +1567,9 @@ async function translateBlocksWithOllama({
   const content = await callOllamaChat(messages, {
     think: false,
     options: buildTranslationOptions(blocks, strictRetry ? { temperature: 0.2 } : {}),
+    signal,
   });
+  throwIfGenerationCancelled({ signal });
   const parsed = extractJsonPayload(content);
   const list = Array.isArray(parsed?.translations) ? parsed.translations : [];
 
@@ -1414,33 +1795,58 @@ function createDocxTranslationBatches(
   let currentItems = [];
   let currentChars = 0;
 
+  function currentBatchBlockLimit(nextItem) {
+    const combined = [...currentItems, nextItem];
+    const allShort = combined.every(
+      (item) => item.charCount <= DOCX_TRANSLATION_SHORT_BLOCK_MAX_CHARS
+    );
+    const hasLong = combined.some(
+      (item) => item.charCount >= DOCX_TRANSLATION_LONG_BLOCK_MIN_CHARS
+    );
+    if (hasLong) return Math.min(2, maxBlocks);
+    return allShort ? DOCX_TRANSLATION_SHORT_BATCH_MAX_BLOCKS : maxBlocks;
+  }
+
+  function flushCurrent() {
+    if (currentItems.length === 0) return;
+    batches.push({
+      items: currentItems,
+      blockCount: currentItems.length,
+      charCount: currentChars,
+    });
+    currentItems = [];
+    currentChars = 0;
+  }
+
   indexedBlocks.forEach((item) => {
+    if (item.charCount >= maxChars) {
+      flushCurrent();
+      batches.push({
+        items: [item],
+        blockCount: 1,
+        charCount: item.charCount,
+      });
+      return;
+    }
+
     const nextCount = currentItems.length + 1;
     const nextChars = currentChars + item.charCount;
+    const dynamicMaxBlocks = currentBatchBlockLimit(item);
     const wouldOverflow =
-      currentItems.length > 0 && (nextCount > maxBlocks || nextChars > maxChars);
+      currentItems.length > 0 &&
+      (nextCount > dynamicMaxBlocks ||
+        nextChars > maxChars ||
+        item.charCount >= DOCX_TRANSLATION_LONG_BLOCK_MIN_CHARS);
 
     if (wouldOverflow) {
-      batches.push({
-        items: currentItems,
-        blockCount: currentItems.length,
-        charCount: currentChars,
-      });
-      currentItems = [];
-      currentChars = 0;
+      flushCurrent();
     }
 
     currentItems.push(item);
     currentChars += item.charCount;
   });
 
-  if (currentItems.length > 0) {
-    batches.push({
-      items: currentItems,
-      blockCount: currentItems.length,
-      charCount: currentChars,
-    });
-  }
+  flushCurrent();
 
   return batches;
 }
@@ -2016,6 +2422,8 @@ function TeacherWorkspace(props) {
     setQuizSettings,
     generationMode,
     onGenerate,
+    onCancelGeneration,
+    onClearTranslationCache,
     loading,
     documentLoading,
     documentStatus,
@@ -2139,6 +2547,15 @@ function TeacherWorkspace(props) {
       <div className="buttonRow">
         <button className="primaryBtn" disabled=${loading} onClick=${onGenerate}>
           ${loading ? t.generatingAiLearningSupport : t.generateAiLearningSupport}
+        </button>
+        ${loading &&
+        html`
+          <button className="ghostBtn" onClick=${onCancelGeneration}>
+            ${t.cancelGeneration}
+          </button>
+        `}
+        <button className="ghostBtn" disabled=${loading} onClick=${onClearTranslationCache}>
+          ${t.clearTranslationCache}
         </button>
       </div>
 
@@ -2377,12 +2794,19 @@ function App() {
   const [showStudentScore, setShowStudentScore] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [importError, setImportError] = useState("");
+  const generationRunRef = useRef({ id: 0, controller: null });
 
   useEffect(() => {
     if (!window.location.hash) setHash("home");
     const onHash = () => setPage(pageFromHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      generationRunRef.current.controller?.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -2407,17 +2831,79 @@ function App() {
     setUiLanguage((prev) => (prev === "en" ? "kk" : "en"));
   }
 
-  function updateGenerationProgress(next) {
+  function beginGenerationRun() {
+    generationRunRef.current.controller?.abort();
+    const controller = new AbortController();
+    const nextRun = {
+      id: generationRunRef.current.id + 1,
+      controller,
+    };
+    generationRunRef.current = nextRun;
+    return {
+      id: nextRun.id,
+      signal: controller.signal,
+    };
+  }
+
+  function isActiveGenerationRun(runContext) {
+    return (
+      Boolean(runContext) &&
+      generationRunRef.current.id === runContext.id &&
+      !runContext.signal?.aborted
+    );
+  }
+
+  function assertActiveGenerationRun(runContext) {
+    if (runContext && !isActiveGenerationRun(runContext)) {
+      throw createGenerationCancelledError();
+    }
+  }
+
+  function finishGenerationRun(runContext) {
+    if (generationRunRef.current.id === runContext?.id) {
+      generationRunRef.current.controller = null;
+    }
+  }
+
+  function setGenerationStatus(type, message, runContext = null) {
+    if (runContext && !isActiveGenerationRun(runContext)) return;
+    setStatusType(type);
+    setStatusMessage(message);
+  }
+
+  function updateGenerationProgress(next, runContext = null) {
+    if (runContext && !isActiveGenerationRun(runContext)) return;
     setGenerationProgress(buildProgressUpdate(next));
   }
 
-  function markGenerationProgressError() {
+  function markGenerationProgressError(runContext = null) {
+    if (runContext && !isActiveGenerationRun(runContext)) return;
     setGenerationProgress((prev) => ({
       ...prev,
       active: true,
       stage: "error",
       label: prev.label || t.preparingTranslation,
     }));
+  }
+
+  function cancelGeneration() {
+    const current = generationRunRef.current;
+    if (!current.controller) return;
+    current.controller.abort();
+    current.controller = null;
+    setLoading(false);
+    setGenerationStatus("info", t.generationCancelled);
+    setGenerationProgress((prev) => ({
+      ...prev,
+      active: true,
+      stage: "cancelled",
+      label: t.generationCancelled,
+    }));
+  }
+
+  function handleClearTranslationCache() {
+    clearTranslationCacheStorage();
+    setGenerationStatus("info", t.translationCacheCleared);
   }
 
   function handleModeChange(nextMode) {
@@ -2513,7 +2999,8 @@ function App() {
     }
   }
 
-  async function translateBlocksForDocument(blocks, preserveFormulas = true) {
+  async function translateBlocksForDocument(blocks, preserveFormulas = true, runContext = null) {
+    assertActiveGenerationRun(runContext);
     if (!Array.isArray(blocks) || blocks.length === 0) {
       return { translationsById: {}, meta: { usedFallback: false, reason: "" } };
     }
@@ -2523,44 +3010,118 @@ function App() {
       mode,
       preserveFormulas,
     });
+    const cache = readTranslationCache();
+    const cacheChangedRef = { changed: false };
+    const plan = buildTranslationWorkPlan({
+      blocks: requestPayload.blocks,
+      targetLanguage,
+      preserveFormulas,
+      cache,
+    });
+    if (plan.cacheHits > 0) {
+      setGenerationStatus("info", t.usingCachedTranslations(plan.cacheHits, blocks.length), runContext);
+      updateGenerationProgress({
+        stage: "translation",
+        current: plan.cacheHits,
+        total: blocks.length,
+        percent: Math.min(70, Math.max(10, (plan.cacheHits / blocks.length) * 70)),
+        label: t.usingCachedTranslations(plan.cacheHits, blocks.length),
+      }, runContext);
+    }
+    if (plan.uniqueBlocks.length > 0 && plan.uniqueBlocks.length < blocks.length) {
+      setGenerationStatus(
+        "info",
+        t.translatingUniqueBlocks(plan.uniqueBlocks.length, blocks.length),
+        runContext
+      );
+      updateGenerationProgress({
+        stage: "translation",
+        current: plan.uniqueBlocks.length,
+        total: blocks.length,
+        percent: Math.min(72, Math.max(12, ((blocks.length - plan.cacheHits) / blocks.length) * 60)),
+        label: t.translatingUniqueBlocks(plan.uniqueBlocks.length, blocks.length),
+      }, runContext);
+    }
+
     let result;
     let forceRetryAll = false;
-    try {
-      result = await translateBlocksWithOllama(requestPayload);
-    } catch (initialErr) {
-      forceRetryAll = true;
+    if (plan.uniqueBlocks.length === 0) {
       result = {
-        translationsById: {},
+        translationsById: { ...plan.translationsById },
         meta: {
           usedFallback: false,
-          reason: `batch_translation_failed:${initialErr?.message || t.unknownBatchError}`,
-          provider: "ollama",
+          reason: "",
+          provider: "cache",
           model: OLLAMA_CONFIG.model,
-          debugSummary: createEmptyDebugSummary(),
-          debugEntries: [],
+          debugSummary: plan.debugSummary,
+          debugEntries: plan.debugEntries,
           suspiciousBlocks: [],
+          cacheSummary: {
+            hits: plan.cacheHits,
+            dedupeReused: plan.dedupeReused,
+            locallyPreserved: plan.locallyPreserved,
+            uniqueRequested: 0,
+          },
         },
       };
+    } else {
+      try {
+        assertActiveGenerationRun(runContext);
+        const apiResult = await translateBlocksWithOllama({
+          ...requestPayload,
+          blocks: plan.uniqueBlocks,
+          signal: runContext?.signal,
+        });
+        assertActiveGenerationRun(runContext);
+        result = mergeTranslationWorkResult({
+          plan,
+          apiResult,
+          targetLanguage,
+          cache,
+          cacheChangedRef,
+        });
+      } catch (initialErr) {
+        if (isGenerationCancelledError(initialErr)) throw initialErr;
+        forceRetryAll = true;
+        result = {
+          translationsById: { ...plan.translationsById },
+          meta: {
+            usedFallback: false,
+            reason: `batch_translation_failed:${initialErr?.message || t.unknownBatchError}`,
+            provider: "ollama",
+            model: OLLAMA_CONFIG.model,
+            debugSummary: plan.debugSummary,
+            debugEntries: [...plan.debugEntries],
+            suspiciousBlocks: [],
+            cacheSummary: {
+              hits: plan.cacheHits,
+              dedupeReused: plan.dedupeReused,
+              locallyPreserved: plan.locallyPreserved,
+              uniqueRequested: plan.uniqueBlocks.length,
+            },
+          },
+        };
+      }
     }
+
     const retryIds = new Set(
       (Array.isArray(result.meta?.suspiciousBlocks) ? result.meta.suspiciousBlocks : [])
         .map((item) => String(item.id || ""))
         .filter(Boolean)
     );
     if (forceRetryAll || result.meta?.itemCountMismatch) {
-      blocks.forEach((block) => retryIds.add(String(block.id || "")));
+      plan.retryableIds.forEach((id) => retryIds.add(id));
     }
 
     if (retryIds.size > 0) {
-      setStatusType("info");
-      setStatusMessage(t.retryingIncompleteBlocks(retryIds.size));
+      setGenerationStatus("info", t.retryingIncompleteBlocks(retryIds.size), runContext);
       updateGenerationProgress({
         stage: "retry",
         current: 0,
         total: retryIds.size,
         percent: 75,
         label: t.retryingIncompleteBlocksProgress,
-      });
+      }, runContext);
       result.meta.reason = mergeReasonList([
         result.meta.reason,
         result.meta.itemCountMismatch ? "translation_item_count_mismatch" : "",
@@ -2575,6 +3136,7 @@ function App() {
       let retryIndex = 0;
 
       for (const block of blocks) {
+        assertActiveGenerationRun(runContext);
         if (!retryIds.has(String(block.id || ""))) continue;
         retryIndex += 1;
         updateGenerationProgress({
@@ -2583,13 +3145,15 @@ function App() {
           total: retryIds.size,
           percent: 75 + (retryIndex / retryIds.size) * 10,
           label: t.retryingIncompleteBlocksProgress,
-        });
+        }, runContext);
         try {
           const retryResult = await translateBlocksWithOllama({
             ...requestPayload,
             blocks: [block],
             strictRetry: true,
+            signal: runContext?.signal,
           });
+          assertActiveGenerationRun(runContext);
           if (
             Array.isArray(retryResult.meta?.suspiciousBlocks) &&
             retryResult.meta.suspiciousBlocks.length > 0
@@ -2604,6 +3168,33 @@ function App() {
           result.translationsById[block.id] =
             retryResult.translationsById?.[block.id] || result.translationsById[block.id];
           result.meta.retrySummary.fixed += 1;
+          const retryEntry = Array.isArray(retryResult.meta?.debugEntries)
+            ? retryResult.meta.debugEntries[0]
+            : null;
+          if (
+            retryEntry &&
+            isCacheableTranslationResult({
+              block,
+              translatedText: result.translationsById[block.id],
+              action: retryEntry.action,
+              validationReasons: retryEntry.validationReasons || [],
+              targetLanguage,
+            })
+          ) {
+            const cacheKey = buildTranslationCacheKey({ block, targetLanguage, preserveFormulas });
+            if (cacheKey) {
+              cache[cacheKey] = {
+                version: TRANSLATION_PROMPT_VERSION,
+                model: OLLAMA_CONFIG.model,
+                targetLanguage,
+                action: "translate",
+                reason: retryEntry.reason || "ollama_strict_retry",
+                translatedText: result.translationsById[block.id],
+                createdAt: Date.now(),
+              };
+              cacheChangedRef.changed = true;
+            }
+          }
           if (forceRetryAll) {
             accumulateDebugSummary(result.meta.debugSummary, retryResult.meta?.debugSummary);
           }
@@ -2618,6 +3209,7 @@ function App() {
             }))
           );
         } catch (retryErr) {
+          if (isGenerationCancelledError(retryErr)) throw retryErr;
           result.translationsById[block.id] = block.text;
           result.meta.retrySummary.preservedAfterRetry += 1;
           unresolvedSuspiciousBlocks.push({
@@ -2655,10 +3247,15 @@ function App() {
       blocks
     );
 
+    if (cacheChangedRef.changed) {
+      writeTranslationCache(cache);
+    }
+
     return result;
   }
 
-  async function translateDocxBlocksInBatches(blocks, preserveFormulas = true) {
+  async function translateDocxBlocksInBatches(blocks, preserveFormulas = true, runContext = null) {
+    assertActiveGenerationRun(runContext);
     if (!Array.isArray(blocks) || blocks.length === 0) {
       return { translationsById: {}, meta: { usedFallback: false, reason: "" } };
     }
@@ -2673,17 +3270,17 @@ function App() {
     let failedBlocks = 0;
 
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+      assertActiveGenerationRun(runContext);
       const batch = batches[batchIndex];
       const batchBlocks = batch.items.map((item) => item.block);
-      setStatusType("info");
-      setStatusMessage(t.docxTranslationBatchProgress(batchIndex + 1, batches.length));
+      setGenerationStatus("info", t.docxTranslationBatchProgress(batchIndex + 1, batches.length), runContext);
       updateGenerationProgress({
         stage: "translation",
         current: batchIndex + 1,
         total: batches.length,
         percent: ((batchIndex + 1) / batches.length) * 75,
         label: t.translatingBatchProgress(batchIndex + 1, batches.length),
-      });
+      }, runContext);
 
       if (typeof console !== "undefined") {
         console.info(
@@ -2694,7 +3291,7 @@ function App() {
       }
 
       try {
-        const batchResult = await translateBlocksForDocument(batchBlocks, preserveFormulas);
+        const batchResult = await translateBlocksForDocument(batchBlocks, preserveFormulas, runContext);
         batch.items.forEach((item) => {
           const translated = String(
             batchResult.translationsById?.[item.block.id] || item.block.text || ""
@@ -2723,6 +3320,7 @@ function App() {
           }
         }
       } catch (batchErr) {
+        if (isGenerationCancelledError(batchErr)) throw batchErr;
         usedFallback = true;
         aggregatedReasons.push(
           t.docxBatchFailedReason(
@@ -2740,20 +3338,22 @@ function App() {
         }
 
         for (let blockIndex = 0; blockIndex < batch.items.length; blockIndex += 1) {
+          assertActiveGenerationRun(runContext);
           const item = batch.items[blockIndex];
           retriedBlocks += 1;
-          setStatusType("info");
-          setStatusMessage(
+          setGenerationStatus(
+            "info",
             t.docxRetryModeProgress(
               blockIndex + 1,
               batch.items.length,
               batchIndex + 1,
               batches.length
-            )
+            ),
+            runContext
           );
 
           try {
-            const singleResult = await translateBlocksForDocument([item.block], preserveFormulas);
+            const singleResult = await translateBlocksForDocument([item.block], preserveFormulas, runContext);
             const translated = String(
               singleResult.translationsById?.[item.block.id] || item.block.text || ""
             ).trim();
@@ -2782,6 +3382,7 @@ function App() {
               }
             }
           } catch (singleErr) {
+            if (isGenerationCancelledError(singleErr)) throw singleErr;
             failedBlocks += 1;
             translationsById[item.block.id] = item.block.text;
             aggregatedDebugEntries.push(
@@ -2830,6 +3431,8 @@ function App() {
         failedBlocks,
         maxBlocksPerBatch: DOCX_TRANSLATION_BATCH_MAX_BLOCKS,
         maxCharsPerBatch: DOCX_TRANSLATION_BATCH_MAX_CHARS,
+        shortBlockMaxChars: DOCX_TRANSLATION_SHORT_BLOCK_MAX_CHARS,
+        shortBatchMaxBlocks: DOCX_TRANSLATION_SHORT_BATCH_MAX_BLOCKS,
       },
     };
 
@@ -2849,16 +3452,16 @@ function App() {
       return;
     }
 
+    const runContext = beginGenerationRun();
     setLoading(true);
-    setStatusType("info");
-    setStatusMessage(t.generatingLessonSupport);
+    setGenerationStatus("info", t.generatingLessonSupport, runContext);
     updateGenerationProgress({
       stage: "translation",
       current: 0,
       total: 0,
       percent: 2,
       label: t.preparingTranslation,
-    });
+    }, runContext);
     setTeacherQuizAnswers({});
 
     const fallbackInput = {
@@ -2870,20 +3473,21 @@ function App() {
     };
 
     if (documentContext.sourceType === "docx" && documentContext.docxData) {
-      setStatusType("info");
-      setStatusMessage(t.docxBatchedMode);
+      setGenerationStatus("info", t.docxBatchedMode, runContext);
       if (typeof console !== "undefined") {
         console.info(
           "[DOCX Batched Path] Preview text is not used as translation input. Lesson support uses local Ollama."
         );
       }
       try {
+        assertActiveGenerationRun(runContext);
         const docxBlocks = buildDocxTranslationBlocks(documentContext.docxData);
         if (!Array.isArray(docxBlocks) || docxBlocks.length === 0) {
           throw new Error(t.noStructuredDocxBlocks);
         }
 
-        const translationResult = await translateDocxBlocksInBatches(docxBlocks, true);
+        const translationResult = await translateDocxBlocksInBatches(docxBlocks, true, runContext);
+        assertActiveGenerationRun(runContext);
         const combinedTranslation = buildDocxCombinedTranslation(
           docxBlocks,
           translationResult.translationsById
@@ -2892,22 +3496,24 @@ function App() {
         let aiLessonBase;
         let aiLessonMeta = { usedFallback: false, reason: "" };
         try {
-          setStatusType("info");
-          setStatusMessage(t.generatingTeachingSupport);
+          setGenerationStatus("info", t.generatingTeachingSupport, runContext);
           updateGenerationProgress({
             stage: "enrichment",
             current: 1,
             total: 1,
             percent: 88,
             label: t.generatingGlossaryQuiz,
-          });
+          }, runContext);
           const aiPayload = await generateTeachingSupportWithOllama(
             fallbackInput,
-            combinedTranslation
+            combinedTranslation,
+            runContext
           );
+          assertActiveGenerationRun(runContext);
           aiLessonBase = normalizeLessonResult(aiPayload, fallbackInput);
           aiLessonMeta = aiPayload.meta || aiLessonBase.meta || aiLessonMeta;
         } catch (lessonErr) {
+          if (isGenerationCancelledError(lessonErr)) throw lessonErr;
           aiLessonBase = createLocalFallbackLesson(fallbackInput);
           aiLessonMeta = {
             usedFallback: true,
@@ -2937,6 +3543,7 @@ function App() {
           },
         };
 
+        assertActiveGenerationRun(runContext);
         const summary = translationResult.meta?.debugSummary || {};
         const usedFallback = Boolean(
           translationResult.meta?.usedFallback || aiLessonMeta?.usedFallback
@@ -2953,22 +3560,33 @@ function App() {
         });
 
         if (usedFallback) {
-          setStatusType("error");
-          setStatusMessage(t.docxGenerationFallbackUsed(fallbackReason));
-          markGenerationProgressError();
+          setGenerationStatus("error", t.docxGenerationFallbackUsed(fallbackReason), runContext);
+          markGenerationProgressError(runContext);
         } else {
-          setStatusType("info");
-          setStatusMessage(t.docxBatchCompleted(summary));
+          setGenerationStatus("info", t.docxBatchCompleted(summary), runContext);
           updateGenerationProgress({
             stage: "done",
             current: 1,
             total: 1,
             percent: 100,
             label: t.progressComplete,
-          });
+          }, runContext);
         }
       } catch (docxErr) {
+        if (isGenerationCancelledError(docxErr)) {
+          if (generationRunRef.current.id === runContext.id) {
+            setGenerationStatus("info", t.generationCancelled);
+            setGenerationProgress((prev) => ({
+              ...prev,
+              active: true,
+              stage: "cancelled",
+              label: t.generationCancelled,
+            }));
+          }
+          return;
+        }
         const fallback = createLocalFallbackLesson(fallbackInput);
+        if (!isActiveGenerationRun(runContext)) return;
         setTeacherLesson({
           ...fallback,
           sourceText: fallbackInput.sourceText,
@@ -2984,23 +3602,25 @@ function App() {
           },
         });
         setTeacherMeta({ usedFallback: true, reason: docxErr?.message || t.docxBlockFailure });
-        setStatusType("error");
-        setStatusMessage(t.docxBatchedTranslationFailed(docxErr?.message || ""));
-        markGenerationProgressError();
+        setGenerationStatus("error", t.docxBatchedTranslationFailed(docxErr?.message || ""), runContext);
+        markGenerationProgressError(runContext);
       } finally {
-        setLoading(false);
+        if (generationRunRef.current.id === runContext.id) {
+          finishGenerationRun(runContext);
+          setLoading(false);
+        }
       }
       return;
     }
 
     try {
+      assertActiveGenerationRun(runContext);
       if (typeof console !== "undefined") {
         console.info(
           `[Non-DOCX Path] sourceType=${documentContext.sourceType || "text"} using local Ollama.`
         );
       }
-      setStatusType("info");
-      setStatusMessage(t.translatingLessonContent);
+      setGenerationStatus("info", t.translatingLessonContent, runContext);
 
       const translationBlocks =
         documentContext.sourceType === "pdf" && documentContext.pdfOverlayData?.allBlocks
@@ -3015,43 +3635,47 @@ function App() {
         total: translationBlocks.length,
         percent: 10,
         label: t.translatingBatchProgress(Math.min(1, translationBlocks.length), translationBlocks.length),
-      });
+      }, runContext);
 
       const translationResult = await translateBlocksForDocument(
         translationBlocks,
-        documentContext.sourceType === "pdf"
+        documentContext.sourceType === "pdf",
+        runContext
       );
+      assertActiveGenerationRun(runContext);
       updateGenerationProgress({
         stage: "translation",
         current: translationBlocks.length,
         total: translationBlocks.length,
         percent: 75,
         label: t.translatingBatchProgress(translationBlocks.length, translationBlocks.length),
-      });
+      }, runContext);
       const completedTranslation = buildDocxCombinedTranslation(
         translationBlocks,
         translationResult.translationsById
       );
 
-      setStatusType("info");
-      setStatusMessage(t.generatingTeachingSupport);
+      setGenerationStatus("info", t.generatingTeachingSupport, runContext);
       updateGenerationProgress({
         stage: "enrichment",
         current: 1,
         total: 1,
         percent: 88,
         label: t.generatingGlossaryQuiz,
-      });
+      }, runContext);
       let lessonBase;
       let lessonMeta = { usedFallback: false, reason: "" };
       try {
         const payload = await generateTeachingSupportWithOllama(
           fallbackInput,
-          completedTranslation
+          completedTranslation,
+          runContext
         );
+        assertActiveGenerationRun(runContext);
         lessonBase = normalizeLessonResult(payload, fallbackInput);
         lessonMeta = payload.meta || lessonBase.meta || lessonMeta;
       } catch (lessonErr) {
+        if (isGenerationCancelledError(lessonErr)) throw lessonErr;
         lessonBase = createLocalFallbackLesson(fallbackInput);
         lessonMeta = {
           usedFallback: true,
@@ -3084,6 +3708,7 @@ function App() {
         documentMessage = t.experimentalPdfOverlayTranslated;
       }
 
+      assertActiveGenerationRun(runContext);
       setTeacherLesson(nextLesson);
       setTeacherMeta({
         usedFallback: Boolean(lessonMeta.usedFallback || documentMeta.usedFallback),
@@ -3091,24 +3716,37 @@ function App() {
       });
 
       if (lessonMeta?.usedFallback || documentMeta?.usedFallback) {
-        setStatusType("error");
-        setStatusMessage(
-          t.localOllamaFallbackUsed(lessonMeta.reason || "", documentMeta.reason || "")
+        setGenerationStatus(
+          "error",
+          t.localOllamaFallbackUsed(lessonMeta.reason || "", documentMeta.reason || ""),
+          runContext
         );
-        markGenerationProgressError();
+        markGenerationProgressError(runContext);
       } else {
-        setStatusType("info");
-        setStatusMessage(t.aiLearningSupportGenerated(documentMessage));
+        setGenerationStatus("info", t.aiLearningSupportGenerated(documentMessage), runContext);
         updateGenerationProgress({
           stage: "done",
           current: 1,
           total: 1,
           percent: 100,
           label: t.progressComplete,
-        });
+        }, runContext);
       }
     } catch (err) {
+      if (isGenerationCancelledError(err)) {
+        if (generationRunRef.current.id === runContext.id) {
+          setGenerationStatus("info", t.generationCancelled);
+          setGenerationProgress((prev) => ({
+            ...prev,
+            active: true,
+            stage: "cancelled",
+            label: t.generationCancelled,
+          }));
+        }
+        return;
+      }
       const fallback = createLocalFallbackLesson(fallbackInput);
+      if (!isActiveGenerationRun(runContext)) return;
       setTeacherLesson({
         ...fallback,
         sourceText: fallbackInput.sourceText,
@@ -3125,11 +3763,13 @@ function App() {
       setTeacherMeta(
         fallback.meta || { usedFallback: true, reason: t.localFallbackUsedReason }
       );
-      setStatusType("error");
-      setStatusMessage(t.couldNotReachLocalOllama(err?.message || ""));
-      markGenerationProgressError();
+      setGenerationStatus("error", t.couldNotReachLocalOllama(err?.message || ""), runContext);
+      markGenerationProgressError(runContext);
     } finally {
-      setLoading(false);
+      if (generationRunRef.current.id === runContext.id) {
+        finishGenerationRun(runContext);
+        setLoading(false);
+      }
     }
   }
   function buildPackage(packageType) {
@@ -3320,6 +3960,8 @@ function App() {
             setQuizSettings=${setQuizSettings}
             generationMode=${mode}
             onGenerate=${handleGenerate}
+            onCancelGeneration=${cancelGeneration}
+            onClearTranslationCache=${handleClearTranslationCache}
             loading=${loading}
             documentLoading=${documentLoading}
             documentStatus=${documentStatus}
