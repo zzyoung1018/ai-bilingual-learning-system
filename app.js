@@ -830,7 +830,7 @@ function buildLessonEnrichmentMessages({
         "You are an assistant for an AI-supported bilingual education product. " +
         "Return ONLY strict JSON. Do not include markdown, comments, or explanatory text outside JSON. " +
         "Use this exact top-level schema: " +
-        '{"glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}]}. ' +
+        '{"glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"meta":{}}. ' +
         "This is the teaching-support generation stage, not the translation stage. Do not include a translation field and do not retranslate or rewrite the completed translation. " +
         "Rules: glossary should have 3-6 key terms. Quiz must follow requested question count, difficulty, and question types. " +
         "For multiple_choice, provide exactly 4 options and a valid answerIndex. For true_false, provide exactly 2 options and a valid answerIndex. For short_answer, provide answerText.",
@@ -850,16 +850,33 @@ function buildLessonEnrichmentMessages({
   ];
 }
 
+function isEmptyOllamaOutputError(err) {
+  const message = String(err?.message || "");
+  return message === getRuntimeUiText().ollamaEmptyResponse;
+}
+
 async function generateTeachingSupportWithOllama(fallbackInput, translation) {
   const messages = buildLessonEnrichmentMessages({
     ...fallbackInput,
     translation,
   });
-  const content = await callOllamaChat(messages, {
-    think: true,
-    options: OLLAMA_ENRICHMENT_OPTIONS,
-  });
-  const parsed = extractJsonPayload(content);
+  let parsed;
+  try {
+    const content = await callOllamaChat(messages, {
+      think: true,
+      options: OLLAMA_ENRICHMENT_OPTIONS,
+    });
+    parsed = extractJsonPayload(content);
+  } catch (err) {
+    if (!isEmptyOllamaOutputError(err)) {
+      throw err;
+    }
+    const retryContent = await callOllamaChat(messages, {
+      think: false,
+      options: OLLAMA_ENRICHMENT_OPTIONS,
+    });
+    parsed = extractJsonPayload(retryContent);
+  }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error(getRuntimeUiText().ollamaNoJson);
