@@ -547,7 +547,7 @@ const PIPELINE_VERSION = "phase-3-static-ollama-v1";
 const TRANSLATION_PROMPT_VERSION = "stage-a-block-translation-v2";
 const ENRICHMENT_PROMPT_VERSION = "stage-b-teaching-support-v2";
 const CACHE_VERSION = "translation-cache-v2";
-const TRANSLATION_CACHE_STORAGE_KEY = "aiBilingual.translationCache.v1";
+const TRANSLATION_CACHE_STORAGE_KEY = "aiBilingual.translationCache.v2";
 const TRANSLATION_CACHE_MAX_ENTRIES = 600;
 const OLLAMA_CONFIG = {
   baseUrl: "http://127.0.0.1:11434",
@@ -584,14 +584,14 @@ const TARGET_LANGUAGE_CONFIG = {
     prompt:
       "Translate into standard Russian using Cyrillic script. Preserve names, formulas, URLs, codes, and technical identifiers only when appropriate.",
     retryPrompt:
-      "Translate this block completely into standard Russian Cyrillic. Preserve names, formulas, URLs, codes, and technical identifiers only when appropriate.",
+      "Translate this block completely into standard Russian Cyrillic. Do not leave ordinary English prose untranslated. Preserve only names, formulas, URLs, numbers, and code-like identifiers.",
     expectedScript: "cyrillic",
   },
   Kazakh: {
     prompt:
       "Translate into natural Kazakh using Cyrillic script. Do not write in Russian. Do not use Kazakh Latin script. Preserve names, formulas, URLs, codes, and technical identifiers only when appropriate.",
     retryPrompt:
-      "Translate this block completely into Kazakh Cyrillic. Do not answer in Russian. Do not use Latin script. Preserve names, formulas, URLs, codes, and technical identifiers only when appropriate.",
+      "Translate this block completely into natural Kazakh using Cyrillic script. Do not answer in Russian. Do not use Latin script. Do not leave ordinary English prose untranslated. Preserve only names, formulas, URLs, numbers, and code-like identifiers.",
     expectedScript: "cyrillic",
   },
 };
@@ -1624,9 +1624,51 @@ function isMostlyNonTranslatableText(text) {
   return false;
 }
 
+function isLikelyNonTranslatableBlock(text) {
+  return isMostlyNonTranslatableText(text);
+}
+
+function looksMostlyEnglish(text) {
+  const value = String(text || "");
+  const latin = countMatches(value, /[A-Za-z]/g);
+  const cyrillic = countMatches(value, /[\u0400-\u04FF]/g);
+  const cjk = countMatches(value, /[\u3400-\u9FFF]/g);
+  const letters = latin + cyrillic + cjk;
+  if (letters < 8) return false;
+  return latin / letters >= 0.55 && latin >= 8;
+}
+
+function hasEnoughCyrillic(text) {
+  const value = String(text || "");
+  const cyrillic = countMatches(value, /[\u0400-\u04FF]/g);
+  const latin = countMatches(value, /[A-Za-z]/g);
+  const letters = cyrillic + latin;
+  if (letters < 8) return true;
+  return cyrillic / letters >= 0.45;
+}
+
+function isSuspiciousTranslation(sourceText, translatedText, targetLanguage) {
+  if (!["Kazakh", "Russian"].includes(targetLanguage)) return [];
+  if (isLikelyNonTranslatableBlock(sourceText)) return [];
+  const reasons = [];
+  const source = normalizeForComparison(sourceText);
+  const translated = normalizeForComparison(translatedText);
+  if (!translated) reasons.push("empty_translated_text");
+  if (source && source === translated && looksMostlyEnglish(source)) {
+    reasons.push("ordinary_english_left_untranslated");
+  }
+  if (looksMostlyEnglish(translated)) {
+    reasons.push("translated_text_still_mostly_english");
+  }
+  if (!hasEnoughCyrillic(translated)) {
+    reasons.push("insufficient_cyrillic_for_target");
+  }
+  return reasons;
+}
+
 function shouldTranslateBlock(block) {
   if (Boolean(block?.isFormula)) return false;
-  return !isMostlyNonTranslatableText(block?.text);
+  return !isLikelyNonTranslatableBlock(block?.text);
 }
 
 function getCyrillicRatio(text) {
@@ -1666,10 +1708,14 @@ function validateTranslatedBlock({ block, translatedText, action, targetLanguage
   if (
     languageConfig.expectedScript === "cyrillic" &&
     countMatches(finalText, /[A-Za-z\u0400-\u04FF]/g) >= 8 &&
-    getCyrillicRatio(finalText) < 0.35
+    !hasEnoughCyrillic(finalText)
   ) {
     reasons.push("low_cyrillic_ratio");
   }
+
+  isSuspiciousTranslation(sourceText, finalText, targetLanguage).forEach((reason) => {
+    if (!reasons.includes(reason)) reasons.push(reason);
+  });
 
   return reasons;
 }
@@ -2053,6 +2099,7 @@ function normalizeDebugEntries(meta, batchItems, translationsById = {}) {
     return {
       ...entry,
       index: originalIndex,
+      batchIndex: entry?.batchIndex,
       id: entry?.id || block.id || `block-${originalIndex}`,
       blockType: entry?.blockType || block.blockType || "",
       sourceLocation: entry?.sourceLocation || block.sourceLocation || block.id || "",
@@ -2071,6 +2118,7 @@ function createSingleBlockFallbackDebugEntry(item, reason) {
   const sourceText = String(block.text || "");
   return {
     index: originalIndex,
+    batchIndex: item?.batchIndex,
     id: block.id || `block-${originalIndex}`,
     blockType: block.blockType || "",
     sourceLocation: block.sourceLocation || block.id || `block-${originalIndex}`,
@@ -2289,6 +2337,93 @@ function buildDebugReport({
     Number(assets.docxData?.traversalSummary?.totalBlocks || 0) ||
     Number(assets.pdfOverlayData?.allBlocks?.length || 0) ||
     0;
+  const detailById = {};
+  debugEntries.forEach((entry) => {
+    const id = String(entry?.id || entry?.blockId || "").trim();
+    if (!id) return;
+    if (!detailById[id]) {
+      detailById[id] = {
+        id,
+        blockId: id,
+        index: entry.index,
+        batchIndex: entry.batchIndex,
+        sourceTextExcerpt: clipText(entry.sourceText || entry.textPreview || "", 180),
+        translatedTextExcerpt: clipText(entry.translatedText || "", 180),
+        reason: "",
+        reasons: [],
+        retryAttempted: false,
+        retryFixed: false,
+        preserved: false,
+      };
+    }
+    const detail = detailById[id];
+    if (Number.isInteger(entry.index)) detail.index = entry.index;
+    if (entry.batchIndex) detail.batchIndex = entry.batchIndex;
+    if (!detail.sourceTextExcerpt && (entry.sourceText || entry.textPreview)) {
+      detail.sourceTextExcerpt = clipText(entry.sourceText || entry.textPreview || "", 180);
+    }
+    if (entry.translatedText) {
+      detail.translatedTextExcerpt = clipText(entry.translatedText, 180);
+    }
+    const validationReasons = Array.isArray(entry.validationReasons)
+      ? entry.validationReasons
+      : [];
+    validationReasons.forEach((reason) => {
+      if (!detail.reasons.includes(reason)) detail.reasons.push(reason);
+    });
+    if (entry.reason && !detail.reasons.includes(entry.reason)) {
+      detail.reasons.push(entry.reason);
+    }
+    if (String(entry.apiAction || "").includes("retry")) {
+      detail.retryAttempted = true;
+      if (String(entry.reason || "").includes("success") && validationReasons.length === 0) {
+        detail.retryFixed = true;
+        detail.preserved = false;
+      }
+    }
+    const sameText =
+      normalizeForComparison(entry.sourceText) &&
+      normalizeForComparison(entry.sourceText) === normalizeForComparison(entry.translatedText);
+    if (
+      entry.action === "preserve" ||
+      entry.action === "fallback_preserve_source" ||
+      (sameText && !detail.retryFixed)
+    ) {
+      detail.preserved = true;
+    }
+    detail.reason = detail.reasons.join(" | ");
+  });
+  suspiciousBlocks.forEach((item) => {
+    const id = String(item?.id || item?.blockId || "").trim();
+    if (!id) return;
+    if (!detailById[id]) {
+      detailById[id] = {
+        id,
+        blockId: id,
+        index: item.index,
+        batchIndex: item.batchIndex,
+        sourceTextExcerpt: "",
+        translatedTextExcerpt: "",
+        reason: "",
+        reasons: [],
+        retryAttempted: false,
+        retryFixed: false,
+        preserved: false,
+      };
+    }
+    (Array.isArray(item.reasons) ? item.reasons : []).forEach((reason) => {
+      if (!detailById[id].reasons.includes(reason)) detailById[id].reasons.push(reason);
+    });
+    detailById[id].reason = detailById[id].reasons.join(" | ");
+  });
+  const blockDetails = Object.values(detailById);
+  const suspiciousBlockDetails = blockDetails.filter(
+    (item) =>
+      item.reasons.some((reason) =>
+        /suspicious|english|cyrillic|identical|preserve|short|empty/i.test(reason)
+      ) || (item.preserved && looksMostlyEnglish(item.sourceTextExcerpt))
+  );
+  const preservedBlockDetails = blockDetails.filter((item) => item.preserved);
 
   return {
     timestamp: new Date().toISOString(),
@@ -2336,11 +2471,8 @@ function buildDebugReport({
       type: statusType || "",
       message: statusMessage || "",
     },
-    suspiciousBlocks: suspiciousBlocks.map((item) => ({
-      id: item.id,
-      index: item.index,
-      reasons: item.reasons || [],
-    })),
+    suspiciousBlocks: suspiciousBlockDetails,
+    preservedBlocks: preservedBlockDetails,
   };
 }
 
@@ -3630,7 +3762,7 @@ function App() {
           batchResult.meta,
           batch.items,
           batchResult.translationsById
-        );
+        ).map((entry) => ({ ...entry, batchIndex: batchIndex + 1 }));
         aggregatedDebugEntries.push(...normalizedEntries);
         accumulateDebugSummary(aggregatedSummary, batchResult.meta?.debugSummary);
         const cacheSummary = batchResult.meta?.cacheSummary || {};
@@ -3693,9 +3825,9 @@ function App() {
 
             const normalizedEntries = normalizeDebugEntries(
               singleResult.meta,
-              [item],
+              [{ ...item, batchIndex: batchIndex + 1 }],
               singleResult.translationsById
-            );
+            ).map((entry) => ({ ...entry, batchIndex: batchIndex + 1 }));
             aggregatedDebugEntries.push(...normalizedEntries);
             accumulateDebugSummary(aggregatedSummary, singleResult.meta?.debugSummary);
             const cacheSummary = singleResult.meta?.cacheSummary || {};
@@ -3724,7 +3856,7 @@ function App() {
             translationsById[item.block.id] = item.block.text;
             aggregatedDebugEntries.push(
               createSingleBlockFallbackDebugEntry(
-                item,
+                { ...item, batchIndex: batchIndex + 1 },
                 singleErr?.message || "single_block_retry_failed"
               )
             );
