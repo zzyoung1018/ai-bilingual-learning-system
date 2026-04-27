@@ -2,11 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "https://esm.sh/react@18.2.0";
 import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
 import htm from "https://esm.sh/htm@3.1.1";
-import {
-  exportLessonToPdf,
-  exportOverlayTranslatedPdf,
-  parsePdfForOverlay,
-} from "./pdf_tools.js";
+import { exportLessonToPdf } from "./pdf_tools.js";
 import {
   buildLessonPackage,
   exportLessonPackageJson,
@@ -38,7 +34,7 @@ const UI_TEXT = {
     productOverview: "Product Overview",
     homeDescription:
       "This demo focuses on a reliable DOCX-first teaching workflow: teachers prepare structured translated materials, then students import and practice with guided learning content.",
-    featureDocxPdf: "Paste text quickly, upload DOCX (recommended), or upload PDF (experimental).",
+    featureDocxPdf: "Paste text quickly, upload DOCX (recommended), or upload PDF to convert into DOCX.",
     featureDocxWorkflow:
       "DOCX workflow preserves headings, paragraphs, lists, and tables where practical.",
     featureGeneration:
@@ -46,7 +42,7 @@ const UI_TEXT = {
     featureExport:
       "Export translated DOCX (recommended), learning package JSON, and optional PDF outputs.",
     featureOverlay:
-      "Overlay PDF export remains available for testing, but may be unstable on complex layouts.",
+      "PDF upload now converts to DOCX first, then uses the recommended DOCX workflow.",
     featureImport:
       "Import prepared packages on the Student side for direct learning practice.",
     openTeacherWorkspace: "Open Teacher Workspace",
@@ -89,11 +85,15 @@ const UI_TEXT = {
     targetLanguage: "Target language",
     guidanceMode: "Guidance mode",
     uploadDocxRecommended: "Upload DOCX (Recommended)",
-    uploadPdfExperimental: "Upload PDF (Experimental)",
+    uploadPdfConvert: "Upload PDF (Convert to DOCX)",
+    convertingPdfToDocx: "Converting PDF to DOCX...",
+    pdfConvertedToDocx: "PDF converted to DOCX successfully.",
+    pdfConversionFailed:
+      "PDF conversion failed. Please try a text-based PDF or upload DOCX directly.",
     pasteTextInput: "Paste Text Input",
     processingUploadedDocument: "Processing uploaded document...",
-    pdfExperimentalWarning:
-      "Experimental PDF overlay mode: complex layouts and tables may not align perfectly yet.",
+    pdfConversionWorkflowNote:
+      "PDF will be converted to DOCX, then processed with the recommended DOCX workflow.",
     sourceTextPreviewEditable: "Source text preview (editable)",
     sourceTextPlaceholder:
       "Paste lesson text here, or upload a PDF / DOCX and edit extracted content.",
@@ -118,7 +118,6 @@ const UI_TEXT = {
     exportLearningPackageStudentJson: "Export Learning Package (Student JSON)",
     exportTeacherHandoutPdf: "Export Teacher Handout (PDF)",
     exportStudentHandoutPdf: "Export Student Handout (PDF)",
-    exportLayoutPreservingPdfExperimental: "Export Layout-Preserving PDF (Experimental)",
     exportDebugReport: "Export Debug Report",
     debugReportExported: "Debug report exported.",
     studentLearningWorkspace: "Student Learning Workspace",
@@ -132,6 +131,7 @@ const UI_TEXT = {
     sourceType: "Source type",
     sourceTypeText: "Text",
     sourceTypePdf: "PDF",
+    sourceTypePdfConvertedDocx: "PDF converted to DOCX",
     sourceTypeDocx: "DOCX",
     glossary: "Glossary",
     practiceQuiz: "Practice Quiz",
@@ -166,15 +166,16 @@ const UI_TEXT = {
     teacherTip:
       "Teacher tip: configure quiz settings first, then generate AI learning support.",
     recommendedWorkflow:
-      "Recommended workflow: Upload DOCX for best structure quality. PDF overlay is experimental.",
+      "Recommended workflow: Upload DOCX for best structure quality. PDF files will be converted to DOCX first.",
     manualTextModeIsActive: "Manual text mode is active.",
     manualTextModeSummary:
       "Manual text mode: type or paste content directly. For structured documents, DOCX is recommended.",
     pleaseUploadDocx: "Please upload a .docx file for the recommended DOCX workflow.",
-    pleaseUploadPdf: "Please upload a .pdf file for experimental overlay mode.",
-    pdfParsed: (fileName, pageCount) => `PDF parsed: ${fileName} (${pageCount} page(s))`,
-    pdfExperimentalSummary:
-      "PDF experimental mode: overlay export preserves visuals approximately, but complex tables may drift.",
+    pleaseUploadPdf: "Please upload a .pdf file to convert to DOCX.",
+    pdfParsed: (fileName, convertedName) =>
+      `PDF converted to DOCX successfully: ${fileName} → ${convertedName}`,
+    pdfConversionSummary:
+      "PDF will be converted to DOCX, then processed with the recommended DOCX workflow.",
     docxParsed: (fileName, totalBlocks) =>
       `DOCX parsed: ${fileName} (${totalBlocks} text blocks found)`,
     docxExtractionAudit: (quick) =>
@@ -203,8 +204,6 @@ const UI_TEXT = {
       `Retrying incomplete blocks... ${count} block(s) need a stricter translation pass.`,
     translatingLessonContent: "Stage 1/2: Translating document with the online AI model...",
     noTranslationChunks: "No translation chunks were available.",
-    experimentalPdfOverlayTranslated:
-      " Experimental PDF overlay blocks translated. Verify complex layouts/tables manually.",
     aiModelFallbackUsed: (lessonReason, documentReason) =>
       `AI model fallback used for stability. ${lessonReason || ""} ${documentReason || ""}`.trim(),
     aiLearningSupportGenerated: (documentMessage) =>
@@ -216,11 +215,6 @@ const UI_TEXT = {
     teacherPdfExported: "Teacher PDF exported.",
     studentPdfExported: "Student PDF exported.",
     pdfExportFailed: "PDF export failed.",
-    overlayPdfRequiresSource:
-      "Overlay PDF export requires an uploaded PDF source document.",
-    overlayPdfExported:
-      "Experimental overlay PDF exported. Verify complex tables manually.",
-    overlayPdfExportFailed: "Overlay PDF export failed.",
     translatedDocxExported: "Translated DOCX exported (recommended output).",
     docxExportFailed: "DOCX export failed.",
     importingLessonPackage: "Importing lesson package...",
@@ -270,7 +264,7 @@ const UI_TEXT = {
     homeDescription:
       "Бұл демо сенімді DOCX-негізді мұғалім жұмыс үдерісіне бағытталған: мұғалімдер құрылымды аударылған материал дайындайды, ал оқушылар оны импорттап, бағытталған оқу мазмұнымен жұмыс істейді.",
     featureDocxPdf:
-      "Мәтінді тез енгізіңіз, DOCX жүктеңіз (ұсынылады) немесе PDF жүктеңіз (эксперименттік).",
+      "Мәтінді тез енгізіңіз, DOCX жүктеңіз (ұсынылады) немесе PDF файлын DOCX-ке түрлендіріңіз.",
     featureDocxWorkflow:
       "DOCX жұмыс үдерісі мүмкіндігінше тақырыптарды, абзацтарды, тізімдерді және кестелерді сақтайды.",
     featureGeneration:
@@ -278,7 +272,7 @@ const UI_TEXT = {
     featureExport:
       "Аударылған DOCX файлын (ұсынылады), сабақ пакетінің JSON нұсқасын және қосымша PDF нәтижелерін экспорттауға болады.",
     featureOverlay:
-      "PDF қабаттастырылған экспорты тестілеу үшін қолжетімді, бірақ күрделі макеттерде тұрақсыз болуы мүмкін.",
+      "PDF алдымен DOCX форматына түрлендіріліп, кейін ұсынылатын DOCX жұмыс үдерісі қолданылады.",
     featureImport:
       "Дайындалған пакеттерді оқушы жағында импорттап, тікелей оқу жаттығуларын орындауға болады.",
     openTeacherWorkspace: "Мұғалімнің жұмыс аймағын ашу",
@@ -323,11 +317,15 @@ const UI_TEXT = {
     targetLanguage: "Мақсатты тіл",
     guidanceMode: "Нұсқаулық режимі",
     uploadDocxRecommended: "DOCX жүктеу (ұсынылады)",
-    uploadPdfExperimental: "PDF жүктеу (эксперименттік)",
+    uploadPdfConvert: "PDF жүктеу (DOCX-ке түрлендіру)",
+    convertingPdfToDocx: "PDF DOCX форматына түрлендіріліп жатыр...",
+    pdfConvertedToDocx: "PDF DOCX форматына сәтті түрлендірілді.",
+    pdfConversionFailed:
+      "PDF түрлендіру сәтсіз аяқталды. Мәтіндік PDF қолданып көріңіз немесе DOCX файлын тікелей жүктеңіз.",
     pasteTextInput: "Мәтінді қолмен енгізу",
     processingUploadedDocument: "Жүктелген құжат өңделіп жатыр...",
-    pdfExperimentalWarning:
-      "PDF қабаттастырудың эксперименттік режимі: күрделі макеттер мен кестелер дәл келмеуі мүмкін.",
+    pdfConversionWorkflowNote:
+      "PDF алдымен DOCX форматына түрлендіріліп, кейін ұсынылатын DOCX жұмыс үдерісімен өңделеді.",
     sourceTextPreviewEditable: "Бастапқы мәтінді алдын ала көру (өңдеуге болады)",
     sourceTextPlaceholder:
       "Сабақ мәтінін осы жерге қойыңыз немесе PDF / DOCX жүктеп, алынған мазмұнды өңдеңіз.",
@@ -356,8 +354,6 @@ const UI_TEXT = {
       "Сабақ пакетін экспорттау (оқушы JSON)",
     exportTeacherHandoutPdf: "Мұғалімге арналған материалды экспорттау (PDF)",
     exportStudentHandoutPdf: "Оқушыға арналған материалды экспорттау (PDF)",
-    exportLayoutPreservingPdfExperimental:
-      "Пішімі сақталған PDF экспорттау (эксперименттік)",
     exportDebugReport: "Тексеру есебін экспорттау",
     debugReportExported: "Тексеру есебі экспортталды.",
     studentLearningWorkspace: "Оқушының оқу жұмыс аймағы",
@@ -371,6 +367,7 @@ const UI_TEXT = {
     sourceType: "Дереккөз түрі",
     sourceTypeText: "Мәтін",
     sourceTypePdf: "PDF",
+    sourceTypePdfConvertedDocx: "PDF-тен DOCX-ке түрлендірілген",
     sourceTypeDocx: "DOCX",
     glossary: "Глоссарий",
     practiceQuiz: "Жаттығу тесті",
@@ -405,15 +402,16 @@ const UI_TEXT = {
     teacherTip:
       "Мұғалімге кеңес: алдымен тест параметрлерін баптап, содан кейін AI оқу қолдауын жасаңыз.",
     recommendedWorkflow:
-      "Ұсынылатын жұмыс тәртібі: құрылымды жақсы сақтау үшін DOCX жүктеңіз. PDF қабаттастыруы эксперименттік.",
+      "Ұсынылатын жұмыс тәртібі: құрылымды жақсы сақтау үшін DOCX жүктеңіз. PDF алдымен DOCX форматына түрлендіріледі.",
     manualTextModeIsActive: "Қолмен мәтін енгізу режимі белсенді.",
     manualTextModeSummary:
       "Қолмен мәтін енгізу режимі: мазмұнды тікелей теріңіз немесе қойыңыз. Құрылымды құжаттар үшін DOCX ұсынылады.",
     pleaseUploadDocx: "Ұсынылатын DOCX жұмыс үдерісі үшін .docx файлын жүктеңіз.",
-    pleaseUploadPdf: "Эксперименттік қабаттастыру режимі үшін .pdf файлын жүктеңіз.",
-    pdfParsed: (fileName, pageCount) => `PDF талданды: ${fileName} (${pageCount} бет)`,
-    pdfExperimentalSummary:
-      "PDF эксперименттік режимі: қабаттастырылған экспорт көріністі шамамен сақтайды, бірақ күрделі кестелерде ауытқу болуы мүмкін.",
+    pleaseUploadPdf: "DOCX-ке түрлендіру үшін .pdf файлын жүктеңіз.",
+    pdfParsed: (fileName, convertedName) =>
+      `PDF DOCX форматына сәтті түрлендірілді: ${fileName} → ${convertedName}`,
+    pdfConversionSummary:
+      "PDF алдымен DOCX форматына түрлендіріліп, кейін ұсынылатын DOCX жұмыс үдерісімен өңделеді.",
     docxParsed: (fileName, totalBlocks) =>
       `DOCX талданды: ${fileName} (${totalBlocks} мәтін блогы табылды)`,
     docxExtractionAudit: (quick) =>
@@ -445,8 +443,6 @@ const UI_TEXT = {
     translatingLessonContent:
       "1/2 кезең: құжат онлайн AI моделі арқылы аударылып жатыр...",
     noTranslationChunks: "Аудармаға арналған бөліктер табылмады.",
-    experimentalPdfOverlayTranslated:
-      " PDF қабаттастыру блоктары аударылды. Күрделі кестелер мен макеттерді қолмен тексеріңіз.",
     aiModelFallbackUsed: (lessonReason, documentReason) =>
       `Тұрақтылық үшін AI моделінің қосалқы режимі қолданылды. ${lessonReason || ""} ${documentReason || ""}`.trim(),
     aiLearningSupportGenerated: (documentMessage) =>
@@ -458,11 +454,6 @@ const UI_TEXT = {
     teacherPdfExported: "Мұғалім PDF файлы экспортталды.",
     studentPdfExported: "Оқушы PDF файлы экспортталды.",
     pdfExportFailed: "PDF экспорттау сәтсіз аяқталды.",
-    overlayPdfRequiresSource:
-      "Қабаттастырылған PDF экспорттау үшін жүктелген бастапқы PDF құжаты қажет.",
-    overlayPdfExported:
-      "Эксперименттік қабаттастырылған PDF экспортталды. Күрделі кестелерді қолмен тексеріңіз.",
-    overlayPdfExportFailed: "Қабаттастырылған PDF экспорттау сәтсіз аяқталды.",
     translatedDocxExported: "Аударылған DOCX экспортталды (ұсынылады).",
     docxExportFailed: "DOCX экспорттау сәтсіз аяқталды.",
     importingLessonPackage: "Сабақ пакеті импортталып жатыр...",
@@ -560,6 +551,7 @@ const MODEL_API_CONFIG = {
   provider: "online-api",
   baseUrl: API_BASE_URL.replace(/\/$/, ""),
   chatUrl: `${API_BASE_URL.replace(/\/$/, "")}/api/llm/chat`,
+  pdfToDocxUrl: `${API_BASE_URL.replace(/\/$/, "")}/api/pdf-to-docx`,
   translationModel: "gpt-5.5",
   enrichmentModel: "gpt-5.4-pro",
   repairModel: "gpt-5.4-pro",
@@ -635,6 +627,7 @@ function getPackageTypeLabel(value, uiLanguage) {
 
 function getDocumentSourceLabel(value, uiLanguage) {
   const text = getUiText(uiLanguage);
+  if (value === "pdf-converted-docx") return text.sourceTypePdfConvertedDocx;
   if (value === "pdf") return text.sourceTypePdf;
   if (value === "docx") return text.sourceTypeDocx;
   return text.sourceTypeText;
@@ -730,8 +723,8 @@ function clearTranslationCacheStorage() {
   }
 }
 
-function getTranslationPreserveFlag(block, preserveFormulas) {
-  if (Boolean(block?.isFormula)) {
+function getTranslationPreserveFlag(block, preserveFormulas, targetLanguage = "") {
+  if (shouldPreserveBeforeTranslation(block, preserveFormulas, targetLanguage)) {
     return preserveFormulas ? "formula_preserved" : "formula_translatable";
   }
   return shouldTranslateBlock(block) ? "translate" : "preserve_candidate";
@@ -746,7 +739,7 @@ function buildTranslationCacheKey({ block, targetLanguage, preserveFormulas }) {
     translationPromptVersion: TRANSLATION_PROMPT_VERSION,
     model: MODEL_API_CONFIG.translationModel,
     targetLanguage,
-    preserveFlag: getTranslationPreserveFlag(block, preserveFormulas),
+    preserveFlag: getTranslationPreserveFlag(block, preserveFormulas, targetLanguage),
     sourceText: normalizedText,
   });
 }
@@ -788,11 +781,24 @@ function createTranslationDebugEntry({
   reason,
   translatedText,
   validationReasons = [],
+  retryAttempted = false,
+  retryFixed = false,
+  preserved,
+  preserveJustification = null,
+  severity = "",
 }) {
   const sourceText = String(block?.text || "");
+  const sameText =
+    normalizeForComparison(sourceText) &&
+    normalizeForComparison(sourceText) === normalizeForComparison(translatedText);
+  const isPreserved =
+    typeof preserved === "boolean"
+      ? preserved
+      : action === "preserve" || action === "fallback_preserve_source" || sameText;
   return {
     index,
     id: block?.id || `block-${index}`,
+    blockId: block?.id || `block-${index}`,
     blockType: block?.blockType || "",
     sourceLocation: block?.sourceLocation || block?.id || `block-${index}`,
     targetLanguage,
@@ -805,6 +811,11 @@ function createTranslationDebugEntry({
     translatedText: String(translatedText || ""),
     textPreview: sourceText.slice(0, 140),
     frontendFlagIsFormula: Boolean(block?.isFormula),
+    retryAttempted,
+    retryFixed,
+    preserved: isPreserved,
+    preserveJustification,
+    severity,
   };
 }
 
@@ -847,17 +858,37 @@ function buildTranslationWorkPlan({ blocks, targetLanguage, preserveFormulas, ca
   blocks.forEach((block, index) => {
     const sourceText = String(block?.text || "");
     const normalizedText = normalizeForComparison(sourceText);
-    const forcePreserve = Boolean(preserveFormulas && block?.isFormula);
+    const forcePreserve = shouldPreserveBeforeTranslation(block, preserveFormulas, targetLanguage);
+    const preserveJustification =
+      getContactOrIdentifierJustification(sourceText) ||
+      (forcePreserve ? "formula_or_code" : isMostlyNonTranslatableText(sourceText) ? "non_language" : "");
+    const localPreserve = !normalizedText || forcePreserve || !shouldTranslateBlock(block);
 
-    if (!normalizedText || forcePreserve) {
+    if (localPreserve) {
+      const preserveReason = !normalizedText
+        ? "empty_block"
+        : forcePreserve
+        ? isOrdinaryProse(sourceText)
+          ? "preserve_overridden_ordinary_prose"
+          : "frontend_formula_preserve"
+        : "frontend_identifier_preserve";
       const entry = createTranslationDebugEntry({
         block,
         index,
         targetLanguage,
-        apiAction: forcePreserve ? "frontend_preserve" : "frontend_empty",
+        apiAction: !normalizedText ? "frontend_empty" : "frontend_preserve",
         action: "preserve",
-        reason: forcePreserve ? "frontend_formula_preserve" : "empty_block",
+        reason: preserveReason,
         translatedText: sourceText,
+        preserveJustification: forcePreserve
+          ? {
+              formulaFlagFromDocument: Boolean(block?.isFormula),
+              formulaOrCodeLike: isLikelyFormulaOrCodeBlock(sourceText),
+              ordinaryProse: isOrdinaryProse(sourceText),
+              charCount: sourceText.length,
+            }
+          : preserveJustification || null,
+        severity: !normalizedText ? "" : "warning",
       });
       translationsById[block.id] = sourceText;
       debugEntries.push(entry);
@@ -959,11 +990,19 @@ function mergeTranslationWorkResult({
           if (!validationReasons.includes(item)) validationReasons.push(item);
         });
       }
+      const severity = getValidationSeverity({
+        block: member.block,
+        translatedText,
+        targetLanguage,
+        validationReasons,
+      });
       if (validationReasons.length > 0) {
         suspiciousBlocks.push({
           id: member.block.id,
           index: member.index,
           reasons: validationReasons,
+          severity,
+          preserveJustification: getContactOrIdentifierJustification(member.block?.text) || "",
         });
       }
 
@@ -977,6 +1016,11 @@ function mergeTranslationWorkResult({
         reason: isPrimary ? reason : `dedupe_reuse:${reason}`,
         translatedText,
         validationReasons,
+        severity,
+        preserveJustification:
+          severity === "warning"
+            ? getContactOrIdentifierJustification(member.block?.text) || null
+            : null,
       });
       translationsById[member.block.id] = translatedText || member.block.text;
       debugEntries.push(entry);
@@ -1019,6 +1063,8 @@ function mergeTranslationWorkResult({
       translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       responseItemCount: apiResult.meta?.responseItemCount || 0,
       expectedItemCount: plan.uniqueBlocks.length,
+      returnedIds: apiResult.meta?.returnedIds || [],
+      missingIds: apiResult.meta?.missingIds || [],
       itemCountMismatch: Boolean(apiResult.meta?.itemCountMismatch),
       suspiciousBlocks,
       debugSummary,
@@ -1580,6 +1626,9 @@ function buildBlockTranslationMessages({
         "Translate normal natural-language content, including headings, paragraphs, list items, and table cell prose. " +
         "Preserve only URLs, emails, file paths, obvious identifiers, course codes, formulas, symbolic expressions, and non-language tokens. " +
         "Do not preserve text only because it is bold, large, in a heading, in a list, in a table, or specially formatted. " +
+        (strictRetry
+          ? "This is a strict retry for one incomplete block: return the exact same id and translate ordinary English prose completely. "
+          : "") +
         "Return one translation item for every input block, in the same order.",
     },
     {
@@ -1615,32 +1664,161 @@ function countMatches(text, pattern) {
 function isMostlyNonTranslatableText(text) {
   const value = String(text || "").trim();
   if (!value) return true;
-  const cyrillic = countMatches(value, /[\u0400-\u04FF]/g);
-  const latin = countMatches(value, /[A-Za-z]/g);
-  const cjk = countMatches(value, /[\u3400-\u9FFF]/g);
-  const letters = cyrillic + latin + cjk;
+  const letters = countMatches(value, /[A-Za-z\u0400-\u04FF\u0600-\u06FF\u3400-\u9FFF]/g);
   if (letters === 0) return true;
   if (/^(https?:\/\/|www\.)\S+$/i.test(value)) return true;
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return true;
   if (value.length <= 3 && letters <= 2) return true;
-  if (/^[A-Z0-9._:/@#%+\-=()[\]{}<>^|,;\s]+$/.test(value) && value.length <= 80) {
+  if (/^[A-Z0-9._:/@#%+\-=()[\]{}<>^|,;]+$/.test(value) && value.length <= 80) {
+    return true;
+  }
+  if (
+    /^[A-Z0-9._:/@#%+\-=()[\]{}<>^|,;\s]+$/.test(value) &&
+    value.length <= 24 &&
+    !/[A-Z]{2,}\s+[A-Z]{2,}/.test(value)
+  ) {
     return true;
   }
   return false;
 }
 
 function isLikelyNonTranslatableBlock(text) {
-  return isMostlyNonTranslatableText(text);
+  return isMostlyNonTranslatableText(text) || isMostlyEntityOrContactInfo(text);
+}
+
+function isOrdinaryProse(text) {
+  const value = normalizeForComparison(text);
+  if (!value) return false;
+  if (/^(https?:\/\/|www\.)\S+$/i.test(value)) return false;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return false;
+
+  const letterRuns = value.match(/[A-Za-z\u0400-\u04FF\u0600-\u06FF\u3400-\u9FFF]+/g) || [];
+  const wordCount = letterRuns.filter((word) => word.length >= 2).length;
+  const letters = letterRuns.join("").length;
+  const hasSentencePunctuation = /[.!?。！？]/.test(value);
+  const hasNaturalSpacing = /\S+\s+\S+/.test(value);
+  const hasLowercase = /[a-z\u0430-\u044f\u0451]/.test(value);
+
+  if (wordCount >= 5 && hasNaturalSpacing) return true;
+  if (wordCount >= 3 && hasSentencePunctuation) return true;
+  if (value.length >= 45 && letters >= 24 && (hasLowercase || hasNaturalSpacing)) return true;
+  return false;
+}
+
+function getContactOrIdentifierJustification(text) {
+  const value = normalizeForComparison(text);
+  if (!value) return "";
+  if (/^(https?:\/\/|www\.)\S+$/i.test(value)) return "url";
+  if (/https?:\/\/|www\./i.test(value)) return "url";
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "email";
+  if (/[^\s@]+@[^\s@]+\.[^\s@]+/.test(value)) return "contact_or_identifier";
+  if (/(?:\+?\d[\d\s().-]{6,}\d)/.test(value)) return "contact_or_identifier";
+  if (/^[A-Z0-9][A-Z0-9.+-]{1,12}$/.test(value)) return "acronym";
+  if (/^(IELTS|TOEFL|GPA|SAT|GRE|GMAT|ACT|CET-?4|CET-?6|CPA|CFA|API|SQL|HTML|CSS|JS|AI|ML|NLP)$/i.test(value)) {
+    return "acronym";
+  }
+  if (
+    /^[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3}$/.test(value) &&
+    !/[.!?。！？:;|/@]/.test(value)
+  ) {
+    return "name";
+  }
+  if (/^[A-Z][A-Za-z0-9_$]*(?:[._/-][A-Za-z0-9_$]+)+$/.test(value)) {
+    return "code_like_identifier";
+  }
+  if (/^[\d\s().,+\-*/:|#%]+$/.test(value)) return "mostly_symbols_or_numbers";
+  return "";
+}
+
+function isLikelyContactOrIdentifierBlock(text) {
+  return Boolean(getContactOrIdentifierJustification(text));
+}
+
+function isMostlyEntityOrContactInfo(text) {
+  const value = normalizeForComparison(text);
+  if (!value) return false;
+  const justification = getContactOrIdentifierJustification(value);
+  if (!justification) return false;
+  if (justification === "url" || justification === "email") return true;
+  const letters = countMatches(value, /[A-Za-z\u0400-\u04FF\u0600-\u06FF\u3400-\u9FFF]/g);
+  const contactChars = countMatches(value, /[\d@:/._|+\-()#%]/g);
+  return value.length <= 140 || contactChars >= letters * 0.25;
+}
+
+function shouldAllowPreservedForTarget(text, targetLanguage) {
+  if (targetLanguage === "English") return true;
+  return isMostlyEntityOrContactInfo(text);
+}
+
+function isLikelyFormulaOrCodeBlock(text) {
+  const value = String(text || "").trim();
+  if (!value) return true;
+  if (isOrdinaryProse(value)) return false;
+  if (/^(https?:\/\/|www\.)\S+$/i.test(value)) return true;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return true;
+
+  const letters = countMatches(value, /[A-Za-z\u0400-\u04FF\u0600-\u06FF\u3400-\u9FFF]/g);
+  const digits = countMatches(value, /\d/g);
+  const mathSymbols = countMatches(value, /[=+\-*/^_<>≤≥≈±√∑∫π∞%]/g);
+  const naturalWords = (value.match(/[A-Za-z\u0400-\u04FF\u0600-\u06FF]{2,}/g) || []).length;
+
+  if (letters === 0) return true;
+  if (value.length <= 3 && letters <= 2) return true;
+  if (mathSymbols >= 2 && naturalWords <= 2) return true;
+  if (/[=<>≤≥≈]/.test(value) && naturalWords <= 3 && digits + mathSymbols >= 2) return true;
+  if (/^[A-Z0-9._:/@#%+\-=()[\]{}<>^|,;]+$/.test(value) && value.length <= 80) {
+    return true;
+  }
+  if (
+    /^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*|\([^)]*\))+$/.test(value) &&
+    naturalWords <= 3
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function shouldPreserveBeforeTranslation(block, preserveFormulas, targetLanguage = "") {
+  const text = String(block?.text || "");
+  if (!normalizeForComparison(text)) return false;
+  if (!preserveFormulas || !block?.isFormula) return false;
+  if (targetLanguage !== "English" && looksLikeOrdinaryEnglishProse(text)) return false;
+  return isLikelyFormulaOrCodeBlock(text);
 }
 
 function looksMostlyEnglish(text) {
   const value = String(text || "");
   const latin = countMatches(value, /[A-Za-z]/g);
   const cyrillic = countMatches(value, /[\u0400-\u04FF]/g);
+  const arabic = countMatches(value, /[\u0600-\u06FF]/g);
   const cjk = countMatches(value, /[\u3400-\u9FFF]/g);
-  const letters = latin + cyrillic + cjk;
+  const letters = latin + cyrillic + arabic + cjk;
   if (letters < 8) return false;
   return latin / letters >= 0.55 && latin >= 8;
+}
+
+function looksLikeOrdinaryEnglishProse(text) {
+  const value = normalizeForComparison(text);
+  if (!value) return false;
+  if (/^(https?:\/\/|www\.)\S+$/i.test(value)) return false;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return false;
+  const latin = countMatches(value, /[A-Za-z]/g);
+  if (latin < 8) return false;
+  if (!/[aeiou]/i.test(value)) return false;
+  return isOrdinaryProse(value) || /[a-z].*\s+[a-z]/.test(value);
+}
+
+function getTextSimilarity(a, b) {
+  const left = normalizeForComparison(a).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const right = normalizeForComparison(b).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+  const leftWords = left.split(/\s+/).filter(Boolean);
+  const rightWords = right.split(/\s+/).filter(Boolean);
+  if (!leftWords.length || !rightWords.length) return 0;
+  const rightSet = new Set(rightWords);
+  const overlap = leftWords.filter((word) => rightSet.has(word)).length;
+  return overlap / Math.max(leftWords.length, rightWords.length);
 }
 
 function hasEnoughCyrillic(text) {
@@ -1652,27 +1830,51 @@ function hasEnoughCyrillic(text) {
   return cyrillic / letters >= 0.45;
 }
 
+function hasTargetScriptSignals(text, targetLanguage) {
+  const value = String(text || "");
+  if (targetLanguage === "Chinese") {
+    return countMatches(value, /[\u3400-\u9FFF]/g) >= 2;
+  }
+  if (targetLanguage === "Kazakh" || targetLanguage === "Russian") {
+    return hasEnoughCyrillic(value);
+  }
+  if (targetLanguage === "Arabic") {
+    const arabic = countMatches(value, /[\u0600-\u06FF]/g);
+    const latin = countMatches(value, /[A-Za-z]/g);
+    const letters = arabic + latin;
+    return letters < 8 || arabic / letters >= 0.35;
+  }
+  return true;
+}
+
 function isSuspiciousTranslation(sourceText, translatedText, targetLanguage) {
-  if (!["Kazakh", "Russian"].includes(targetLanguage)) return [];
+  if (targetLanguage === "English") return [];
   if (isLikelyNonTranslatableBlock(sourceText)) return [];
   const reasons = [];
   const source = normalizeForComparison(sourceText);
   const translated = normalizeForComparison(translatedText);
+  const sourceIsEnglishProse = looksLikeOrdinaryEnglishProse(source);
   if (!translated) reasons.push("empty_translated_text");
-  if (source && source === translated && looksMostlyEnglish(source)) {
+  if (sourceIsEnglishProse && source && source === translated) {
     reasons.push("ordinary_english_left_untranslated");
   }
-  if (looksMostlyEnglish(translated)) {
+  if (sourceIsEnglishProse && looksMostlyEnglish(translated)) {
     reasons.push("translated_text_still_mostly_english");
   }
-  if (!hasEnoughCyrillic(translated)) {
+  if (sourceIsEnglishProse && getTextSimilarity(source, translated) >= 0.72) {
+    reasons.push("translated_text_too_similar_to_source");
+  }
+  if (sourceIsEnglishProse && !hasTargetScriptSignals(translated, targetLanguage)) {
+    reasons.push(`missing_${String(targetLanguage || "target").toLowerCase()}_script_signal`);
+  }
+  if (["Kazakh", "Russian"].includes(targetLanguage) && !hasEnoughCyrillic(translated)) {
     reasons.push("insufficient_cyrillic_for_target");
   }
   return reasons;
 }
 
 function shouldTranslateBlock(block) {
-  if (Boolean(block?.isFormula)) return false;
+  if (shouldPreserveBeforeTranslation(block, true)) return false;
   return !isLikelyNonTranslatableBlock(block?.text);
 }
 
@@ -1725,6 +1927,13 @@ function validateTranslatedBlock({ block, translatedText, action, targetLanguage
   return reasons;
 }
 
+function getValidationSeverity({ block, translatedText, targetLanguage, validationReasons }) {
+  if (!Array.isArray(validationReasons) || validationReasons.length === 0) return "";
+  const sourceText = String(block?.text || "");
+  if (shouldAllowPreservedForTarget(sourceText, targetLanguage)) return "warning";
+  return "fatal";
+}
+
 async function translateBlocksWithModel({
   blocks,
   targetLanguage,
@@ -1765,28 +1974,32 @@ async function translateBlocksWithModel({
   const debugSummary = createEmptyDebugSummary();
   const suspiciousBlocks = [];
   const responseItemCount = list.length;
+  const expectedIds = new Set(blocks.map((block) => String(block.id || "")));
+  const returnedIds = new Set(
+    list
+      .map((item) => String(item?.id || "").trim())
+      .filter((id) => id && expectedIds.has(id))
+  );
 
   blocks.forEach((block, index) => {
-    const rawById = byId.get(String(block.id || ""));
-    const raw = rawById || list[index];
-    if (!raw || typeof raw !== "object") {
-      throw new Error(getRuntimeUiText().aiNoJson);
-    }
-    const idMatched =
-      Boolean(rawById) || String(raw.id || "") === String(block.id || "");
+    const blockId = String(block.id || "");
+    const raw = byId.get(blockId);
+    const idMatched = Boolean(raw);
 
     const sourceText = String(block.text || "");
-    const forcePreserve = Boolean(preserveFormulas && block.isFormula);
-    const action = forcePreserve
+    const forcePreserve = shouldPreserveBeforeTranslation(block, preserveFormulas, targetLanguage);
+    const action = !raw
+      ? "preserve"
+      : forcePreserve
       ? "preserve"
       : String(raw.action || "translate").trim().toLowerCase();
     const translatedText = String(
-      raw.translatedText ?? raw.translated_text ?? raw.translation ?? ""
+      raw?.translatedText ?? raw?.translated_text ?? raw?.translation ?? ""
     ).trim();
     const finalText =
       action === "preserve" || forcePreserve ? sourceText : translatedText || sourceText;
 
-    if (action !== "preserve" && !translatedText) {
+    if (raw && action !== "preserve" && !translatedText) {
       throw new Error(getRuntimeUiText().aiEmptyResponse);
     }
 
@@ -1797,13 +2010,25 @@ async function translateBlocksWithModel({
       targetLanguage,
     });
     if (!idMatched) {
+      if (shouldTranslateBlock(block)) {
+        validationReasons.push("missing_translation_item");
+      }
+    } else if (String(raw.id || "") !== blockId) {
       validationReasons.push("missing_or_mismatched_id");
     }
+    const severity = getValidationSeverity({
+      block,
+      translatedText: finalText,
+      targetLanguage,
+      validationReasons,
+    });
     if (validationReasons.length > 0) {
       suspiciousBlocks.push({
         id: block.id,
         index,
         reasons: validationReasons,
+        severity,
+        preserveJustification: getContactOrIdentifierJustification(sourceText) || "",
       });
       debugSummary.suspicious += 1;
     }
@@ -1828,12 +2053,19 @@ async function translateBlocksWithModel({
       sourceText,
       apiAction: "online_api",
       action: forcePreserve ? "preserve" : action,
-      reason: forcePreserve ? "frontend_formula_preserve" : String(raw.reason || "online_api"),
+      reason: forcePreserve
+        ? "frontend_formula_preserve"
+        : raw
+        ? String(raw.reason || "online_api")
+        : "missing_translation_item",
       validationReasons,
       needsRetry: validationReasons.length > 0,
       translatedText: finalText,
       textPreview: sourceText.slice(0, 140),
       frontendFlagIsFormula: Boolean(block.isFormula),
+      severity,
+      preserveJustification:
+        severity === "warning" ? getContactOrIdentifierJustification(sourceText) || null : null,
     });
   });
 
@@ -1848,7 +2080,9 @@ async function translateBlocksWithModel({
       translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       responseItemCount,
       expectedItemCount: blocks.length,
-      itemCountMismatch: responseItemCount !== blocks.length,
+      returnedIds: Array.from(returnedIds),
+      missingIds: Array.from(expectedIds).filter((id) => id && !returnedIds.has(id)),
+      itemCountMismatch: responseItemCount !== blocks.length || returnedIds.size !== expectedIds.size,
       suspiciousBlocks,
       debugSummary,
       debugEntries,
@@ -2118,7 +2352,7 @@ function normalizeDebugEntries(meta, batchItems, translationsById = {}) {
   });
 }
 
-function createSingleBlockFallbackDebugEntry(item, reason) {
+function createSingleBlockFallbackDebugEntry(item, reason, targetLanguage = "") {
   const block = item?.block || {};
   const originalIndex = Number.isInteger(item?.originalIndex) ? item.originalIndex : 0;
   const sourceText = String(block.text || "");
@@ -2126,13 +2360,19 @@ function createSingleBlockFallbackDebugEntry(item, reason) {
     index: originalIndex,
     batchIndex: item?.batchIndex,
     id: block.id || `block-${originalIndex}`,
+    blockId: block.id || `block-${originalIndex}`,
     blockType: block.blockType || "",
     sourceLocation: block.sourceLocation || block.id || `block-${originalIndex}`,
-    targetLanguage: "",
+    targetLanguage,
     sourceText,
     apiAction: "error",
     action: "fallback_preserve_source",
     reason: reason || "single_block_retry_failed",
+    validationReasons: [reason || "single_block_retry_failed"],
+    retryAttempted: true,
+    retryFixed: false,
+    preserved: true,
+    severity: "fatal",
     translatedText: sourceText,
     textPreview: sourceText.slice(0, 140),
     frontendFlagIsFormula: Boolean(block.isFormula),
@@ -2341,7 +2581,6 @@ function buildDebugReport({
     Number(debugSummary.total || 0) ||
     debugEntries.length ||
     Number(assets.docxData?.traversalSummary?.totalBlocks || 0) ||
-    Number(assets.pdfOverlayData?.allBlocks?.length || 0) ||
     0;
   const detailById = {};
   debugEntries.forEach((entry) => {
@@ -2360,9 +2599,13 @@ function buildDebugReport({
         retryAttempted: false,
         retryFixed: false,
         preserved: false,
+        preserveJustification: entry.preserveJustification || null,
+        severity: entry.severity || "",
       };
     }
     const detail = detailById[id];
+    if (entry.preserveJustification) detail.preserveJustification = entry.preserveJustification;
+    if (entry.severity && !detail.severity) detail.severity = entry.severity;
     if (Number.isInteger(entry.index)) detail.index = entry.index;
     if (entry.batchIndex) detail.batchIndex = entry.batchIndex;
     if (!detail.sourceTextExcerpt && (entry.sourceText || entry.textPreview)) {
@@ -2380,9 +2623,12 @@ function buildDebugReport({
     if (entry.reason && !detail.reasons.includes(entry.reason)) {
       detail.reasons.push(entry.reason);
     }
-    if (String(entry.apiAction || "").includes("retry")) {
+    if (entry.retryAttempted || String(entry.apiAction || "").includes("retry")) {
       detail.retryAttempted = true;
-      if (String(entry.reason || "").includes("success") && validationReasons.length === 0) {
+      if (
+        entry.retryFixed ||
+        (String(entry.reason || "").includes("success") && validationReasons.length === 0)
+      ) {
         detail.retryFixed = true;
         detail.preserved = false;
       }
@@ -2393,6 +2639,7 @@ function buildDebugReport({
     if (
       entry.action === "preserve" ||
       entry.action === "fallback_preserve_source" ||
+      entry.preserved ||
       (sameText && !detail.retryFixed)
     ) {
       detail.preserved = true;
@@ -2415,7 +2662,13 @@ function buildDebugReport({
         retryAttempted: false,
         retryFixed: false,
         preserved: false,
+        preserveJustification: null,
+        severity: item.severity || "",
       };
+    }
+    if (item.severity && !detailById[id].severity) detailById[id].severity = item.severity;
+    if (item.preserveJustification && !detailById[id].preserveJustification) {
+      detailById[id].preserveJustification = item.preserveJustification;
     }
     (Array.isArray(item.reasons) ? item.reasons : []).forEach((reason) => {
       if (!detailById[id].reasons.includes(reason)) detailById[id].reasons.push(reason);
@@ -2426,7 +2679,7 @@ function buildDebugReport({
   const suspiciousBlockDetails = blockDetails.filter(
     (item) =>
       item.reasons.some((reason) =>
-        /suspicious|english|cyrillic|identical|preserve|short|empty/i.test(reason)
+        /suspicious|english|cyrillic|arabic|chinese|script|identical|preserve|short|empty|missing|similar/i.test(reason)
       ) || (item.preserved && looksMostlyEnglish(item.sourceTextExcerpt))
   );
   const preservedBlockDetails = blockDetails.filter((item) => item.preserved);
@@ -2446,6 +2699,8 @@ function buildDebugReport({
     targetLanguage: lesson?.targetLanguage || "",
     sourceType: assets.sourceType || "text",
     documentFileName: assets.fileName || "",
+    originalFileName: assets.originalFileName || "",
+    convertedDocxFileName: assets.convertedDocxFileName || assets.docxData?.convertedDocxFileName || "",
     counts: {
       totalSourceBlocks,
       translatedBlockCount: Number(debugSummary.translated || 0),
@@ -2866,7 +3121,6 @@ function TeacherWorkspace(props) {
     onExportStudentJson,
     onExportTeacherPdf,
     onExportStudentPdf,
-    onExportOverlayPdf,
     onExportDocx,
     onExportDebugReport,
     teacherQuizAnswers,
@@ -2935,7 +3189,7 @@ function TeacherWorkspace(props) {
             ${t.pasteTextInput}
           </button>
           <label className="inlineFile">
-            ${t.uploadPdfExperimental}
+            ${t.uploadPdfConvert}
             <input
               type="file"
               accept=".pdf,application/pdf"
@@ -2949,13 +3203,6 @@ function TeacherWorkspace(props) {
         ${documentStatus && html`<div className="statusBanner statusBanner--info">${documentStatus}</div>`}
         ${documentError && html`<div className="statusBanner statusBanner--error">${documentError}</div>`}
         ${documentSummary && html`<div className="statusBanner statusBanner--info">${documentSummary}</div>`}
-        ${lesson?.documentAssets?.sourceType === "pdf" &&
-        html`
-          <div className="statusBanner statusBanner--error">
-            ${t.pdfExperimentalWarning}
-          </div>
-        `}
-
         <label>
           ${t.sourceTextPreviewEditable}
           <textarea
@@ -3007,9 +3254,6 @@ function TeacherWorkspace(props) {
           </button>
           <button className="ghostBtn" onClick=${onExportStudentPdf}>
             ${t.exportStudentHandoutPdf}
-          </button>
-          <button className="ghostBtn" onClick=${onExportOverlayPdf}>
-            ${t.exportLayoutPreservingPdfExperimental}
           </button>
           <button className="ghostBtn" onClick=${onExportDebugReport}>
             ${t.exportDebugReport}
@@ -3211,7 +3455,6 @@ function App() {
   const [documentContext, setDocumentContext] = useState({
     sourceType: "text",
     fileName: "",
-    pdfOverlayData: null,
     docxData: null,
     blockTranslations: {},
     translationDebugEntries: [],
@@ -3371,7 +3614,6 @@ function App() {
     setDocumentContext({
       sourceType: "text",
       fileName: "",
-      pdfOverlayData: null,
       docxData: null,
       blockTranslations: {},
       translationDebugEntries: [],
@@ -3379,6 +3621,32 @@ function App() {
     setDocumentStatus(t.manualTextModeIsActive);
     setDocumentError("");
     setDocumentSummary(t.manualTextModeSummary);
+  }
+
+  async function convertPdfToDocxFile(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(MODEL_API_CONFIG.pdfToDocxUrl, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let detail = "";
+      try {
+        const data = await response.json();
+        detail = data?.detail || "";
+      } catch (_err) {
+        detail = await response.text().catch(() => "");
+      }
+      throw new Error(detail || t.pdfConversionFailed);
+    }
+
+    const blob = await response.blob();
+    const convertedName = `${safeDownloadName(file.name.replace(/\.pdf$/i, ""), "converted")}.docx`;
+    return new File([blob], convertedName, {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
   }
 
   async function processUploadedDocument(file, expectedType = "any") {
@@ -3397,18 +3665,31 @@ function App() {
       }
 
       if (lowerName.endsWith(".pdf")) {
-        const parsed = await parsePdfForOverlay(file);
+        setDocumentStatus(t.convertingPdfToDocx);
+        setDocumentSummary(t.pdfConversionSummary);
+        const convertedFile = await convertPdfToDocxFile(file);
+        const parsed = await importDocxFile(convertedFile);
         setSourceText(parsed.fullText || "");
         setDocumentContext({
-          sourceType: "pdf",
+          sourceType: "pdf-converted-docx",
           fileName: file.name,
-          pdfOverlayData: parsed,
-          docxData: null,
+          originalFileName: file.name,
+          convertedDocxFileName: convertedFile.name,
+          docxData: {
+            ...parsed,
+            originalPdfFileName: file.name,
+            convertedDocxFileName: convertedFile.name,
+          },
           blockTranslations: {},
           translationDebugEntries: [],
         });
-        setDocumentStatus(t.pdfParsed(file.name, parsed.pageCount));
-        setDocumentSummary(t.pdfExperimentalSummary);
+        logDocxExtractionAudit(parsed);
+        const quick = getDocxExtractionQuickCounts(parsed);
+        const totalBlocks = parsed?.traversalSummary?.totalBlocks || 0;
+        setDocumentStatus(
+          `${t.pdfParsed(file.name, convertedFile.name)} ${t.docxParsed(convertedFile.name, totalBlocks)}`
+        );
+        setDocumentSummary(`${t.pdfConvertedToDocx} ${t.docxExtractionAudit(quick)}`);
       } else if (lowerName.endsWith(".docx")) {
         const parsed = await importDocxFile(file);
         // Preview text is for UI display/debug. DOCX translation uses structured blocks only.
@@ -3416,7 +3697,6 @@ function App() {
         setDocumentContext({
           sourceType: "docx",
           fileName: file.name,
-          pdfOverlayData: null,
           docxData: parsed,
           blockTranslations: {},
           translationDebugEntries: [],
@@ -3430,7 +3710,11 @@ function App() {
         throw new Error(t.unsupportedFileType);
       }
     } catch (err) {
-      setDocumentError(err?.message || t.documentProcessingFailed);
+      const fallbackMessage =
+        expectedType === "pdf" || lowerName.endsWith(".pdf")
+          ? t.pdfConversionFailed
+          : t.documentProcessingFailed;
+      setDocumentError(err?.message || fallbackMessage);
       setDocumentStatus("");
     } finally {
       setDocumentLoading(false);
@@ -3566,6 +3850,7 @@ function App() {
 
     const retryIds = new Set(
       (Array.isArray(result.meta?.suspiciousBlocks) ? result.meta.suspiciousBlocks : [])
+        .filter((item) => item?.severity !== "warning")
         .map((item) => String(item.id || ""))
         .filter(Boolean)
     );
@@ -3668,6 +3953,9 @@ function App() {
               ...entry,
               apiAction: "online_api_strict_retry",
               reason: `strict_retry_success: ${entry.reason || "online_api"}`,
+              retryAttempted: true,
+              retryFixed: true,
+              preserved: false,
             }))
           );
         } catch (retryErr) {
@@ -3685,7 +3973,8 @@ function App() {
           result.meta.debugEntries.push(
             createSingleBlockFallbackDebugEntry(
               { block, originalIndex: blocks.indexOf(block) },
-              retryErr?.message || "strict_retry_failed"
+              retryErr?.message || "strict_retry_failed",
+              targetLanguage
             )
           );
           if (forceRetryAll) {
@@ -3693,6 +3982,7 @@ function App() {
           }
           result.meta.debugSummary.preserved += 1;
           result.meta.debugSummary.unchangedAfterTranslate += 1;
+          result.meta.debugSummary.suspicious += 1;
         }
       }
       result.meta.suspiciousBlocks = unresolvedSuspiciousBlocks;
@@ -3866,7 +4156,8 @@ function App() {
             aggregatedDebugEntries.push(
               createSingleBlockFallbackDebugEntry(
                 { ...item, batchIndex: batchIndex + 1 },
-                singleErr?.message || "single_block_retry_failed"
+                singleErr?.message || "single_block_retry_failed",
+                targetLanguage
               )
             );
             accumulateDebugSummary(aggregatedSummary, {
@@ -3874,6 +4165,7 @@ function App() {
               translated: 0,
               preserved: 1,
               unchangedAfterTranslate: 1,
+              suspicious: 1,
             });
             aggregatedReasons.push(
               t.docxBatchBlockFailedReason(
@@ -3955,7 +4247,10 @@ function App() {
       quizSettings: normalizeQuizSettings(quizSettings),
     };
 
-    if (documentContext.sourceType === "docx" && documentContext.docxData) {
+    if (
+      ["docx", "pdf-converted-docx"].includes(documentContext.sourceType) &&
+      documentContext.docxData
+    ) {
       setGenerationStatus("info", t.docxBatchedMode, runContext);
       if (typeof console !== "undefined") {
         console.info(
@@ -4015,9 +4310,10 @@ function App() {
           mode: fallbackInput.mode,
           quizSettings: fallbackInput.quizSettings,
           documentAssets: {
-            sourceType: "docx",
+            sourceType: documentContext.sourceType,
             fileName: documentContext.fileName,
-            pdfOverlayData: null,
+            originalFileName: documentContext.originalFileName || "",
+            convertedDocxFileName: documentContext.convertedDocxFileName || "",
             docxData: documentContext.docxData,
             blockTranslations: translationResult.translationsById || {},
             translationDebugEntries: Array.isArray(translationResult.meta?.debugEntries)
@@ -4082,9 +4378,10 @@ function App() {
           ...fallback,
           sourceText: fallbackInput.sourceText,
           documentAssets: {
-            sourceType: "docx",
+            sourceType: documentContext.sourceType,
             fileName: documentContext.fileName,
-            pdfOverlayData: null,
+            originalFileName: documentContext.originalFileName || "",
+            convertedDocxFileName: documentContext.convertedDocxFileName || "",
             docxData: documentContext.docxData || null,
             blockTranslations: {},
             translationDebugEntries: [],
@@ -4120,10 +4417,7 @@ function App() {
       }
       setGenerationStatus("info", t.translatingLessonContent, runContext);
 
-      const translationBlocks =
-        documentContext.sourceType === "pdf" && documentContext.pdfOverlayData?.allBlocks
-          ? documentContext.pdfOverlayData.allBlocks
-          : buildPlainTextTranslationBlocks(fallbackInput.sourceText);
+      const translationBlocks = buildPlainTextTranslationBlocks(fallbackInput.sourceText);
       if (!Array.isArray(translationBlocks) || translationBlocks.length === 0) {
         throw new Error(t.noTranslationChunks);
       }
@@ -4137,7 +4431,7 @@ function App() {
 
       const translationResult = await translateBlocksForDocument(
         translationBlocks,
-        documentContext.sourceType === "pdf",
+        true,
         runContext
       );
       assertActiveGenerationRun(runContext);
@@ -4189,10 +4483,10 @@ function App() {
         documentAssets: {
           sourceType: documentContext.sourceType,
           fileName: documentContext.fileName,
-          pdfOverlayData: documentContext.pdfOverlayData,
           docxData: documentContext.docxData || null,
-          blockTranslations:
-            documentContext.sourceType === "pdf" ? translationResult.translationsById || {} : {},
+          originalFileName: documentContext.originalFileName || "",
+          convertedDocxFileName: documentContext.convertedDocxFileName || "",
+          blockTranslations: {},
           translationDebugEntries: Array.isArray(translationResult.meta?.debugEntries)
             ? translationResult.meta.debugEntries
             : [],
@@ -4202,9 +4496,6 @@ function App() {
 
       let documentMessage = "";
       const documentMeta = translationResult.meta || { usedFallback: false, reason: "" };
-      if (documentContext.sourceType === "pdf" && documentContext.pdfOverlayData?.allBlocks) {
-        documentMessage = t.experimentalPdfOverlayTranslated;
-      }
 
       assertActiveGenerationRun(runContext);
       setTeacherLesson(nextLesson);
@@ -4257,8 +4548,9 @@ function App() {
         documentAssets: {
           sourceType: documentContext.sourceType,
           fileName: documentContext.fileName,
-          pdfOverlayData: documentContext.pdfOverlayData,
           docxData: documentContext.docxData || null,
+          originalFileName: documentContext.originalFileName || "",
+          convertedDocxFileName: documentContext.convertedDocxFileName || "",
           blockTranslations: {},
           translationDebugEntries: [],
           formulaPreservation: "Formula-like blocks are kept unchanged in fallback mode.",
@@ -4295,6 +4587,8 @@ function App() {
       packageType,
       documentSourceType: teacherLesson.documentAssets?.sourceType || "text",
       documentFileName: teacherLesson.documentAssets?.fileName || "",
+      originalFileName: teacherLesson.documentAssets?.originalFileName || "",
+      convertedDocxFileName: teacherLesson.documentAssets?.convertedDocxFileName || "",
       meta: teacherMeta,
     });
   }
@@ -4338,31 +4632,6 @@ function App() {
     } catch (err) {
       setStatusType("error");
       setStatusMessage(err?.message || t.pdfExportFailed);
-    }
-  }
-
-  async function exportOverlayPdf() {
-    if (!teacherLesson) return;
-    const assets = teacherLesson.documentAssets || {};
-    if (assets.sourceType !== "pdf" || !assets.pdfOverlayData) {
-      setStatusType("error");
-      setStatusMessage(t.overlayPdfRequiresSource);
-      return;
-    }
-    try {
-      await exportOverlayTranslatedPdf({
-        lessonTitle: teacherLesson.lessonTitle || lessonTitle,
-        targetLanguage: teacherLesson.targetLanguage || targetLanguage,
-        mode,
-        pdfOverlayData: assets.pdfOverlayData,
-        blockTranslations: assets.blockTranslations || {},
-        audienceLabel: "Teacher",
-      });
-      setStatusType("info");
-      setStatusMessage(t.overlayPdfExported);
-    } catch (err) {
-      setStatusType("error");
-      setStatusMessage(err?.message || t.overlayPdfExportFailed);
     }
   }
 
@@ -4500,7 +4769,6 @@ function App() {
             onExportStudentJson=${exportStudentJson}
             onExportTeacherPdf=${exportTeacherPdf}
             onExportStudentPdf=${exportStudentPdf}
-            onExportOverlayPdf=${exportOverlayPdf}
             onExportDocx=${exportDocx}
             onExportDebugReport=${exportDebugReport}
             teacherQuizAnswers=${teacherQuizAnswers}

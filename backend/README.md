@@ -14,3 +14,7 @@ uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Before starting, edit `.env` and set `OPENAI_API_KEY` plus `OPENAI_BASE_URL`.
+
+## PDF conversion
+
+The frontend sends PDF uploads to `POST /api/pdf-to-docx`. The backend converts the PDF with `pdf2docx` and returns a DOCX file. This works best for text-based PDFs; scanned or image-only PDFs may need OCR, which is not implemented in this phase.

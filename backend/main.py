@@ -1,10 +1,14 @@
 import os
+import re
+import tempfile
 from typing import Any, Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from openai import OpenAI
+from pdf2docx import Converter
 from pydantic import BaseModel, Field
 
 load_dotenv()
@@ -15,7 +19,7 @@ DEFAULT_ALLOWED_ORIGINS = (
     "http://localhost:5500,"
     "http://127.0.0.1:5500"
 )
-MAX_REQUEST_BYTES = int(os.getenv("MAX_REQUEST_BYTES", str(2 * 1024 * 1024)))
+MAX_REQUEST_BYTES = int(os.getenv("MAX_REQUEST_BYTES", str(25 * 1024 * 1024)))
 
 
 def parse_allowed_origins() -> list[str]:
@@ -29,6 +33,12 @@ def get_model_for_stage(stage: str) -> str:
     if stage == "json_repair":
         return os.getenv("OPENAI_MODEL_REPAIR", "gpt-5.4-pro")
     return os.getenv("OPENAI_MODEL_ENRICHMENT", "gpt-5.4-pro")
+
+
+def safe_download_name(filename: str, fallback: str = "converted.docx") -> str:
+    base = os.path.basename(filename or fallback)
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("._")
+    return base or fallback
 
 
 class ChatMessage(BaseModel):
@@ -77,6 +87,62 @@ def health():
             "json_repair": get_model_for_stage("json_repair"),
         },
     }
+
+
+@app.post("/api/pdf-to-docx")
+async def pdf_to_docx(file: UploadFile = File(...)):
+    filename = safe_download_name(file.filename or "uploaded.pdf")
+    content_type = (file.content_type or "").lower()
+    if not filename.lower().endswith(".pdf") and content_type not in {
+        "application/pdf",
+        "application/x-pdf",
+    }:
+        raise HTTPException(status_code=400, detail="Please upload a PDF file.")
+
+    with tempfile.TemporaryDirectory(prefix="pdf-to-docx-") as temp_dir:
+        pdf_path = os.path.join(temp_dir, filename if filename.lower().endswith(".pdf") else "uploaded.pdf")
+        docx_name = re.sub(r"\.pdf$", "", filename, flags=re.IGNORECASE) + ".docx"
+        docx_path = os.path.join(temp_dir, docx_name)
+
+        try:
+            with open(pdf_path, "wb") as output:
+                while chunk := await file.read(1024 * 1024):
+                    output.write(chunk)
+
+            if os.path.getsize(pdf_path) == 0:
+                raise HTTPException(status_code=400, detail="Uploaded PDF file is empty.")
+
+            converter = Converter(pdf_path)
+            try:
+                converter.convert(docx_path, start=0, end=None)
+            finally:
+                converter.close()
+
+            if not os.path.exists(docx_path) or os.path.getsize(docx_path) == 0:
+                raise RuntimeError(
+                    "PDF conversion produced an empty DOCX. pdf2docx works best for text-based PDFs; "
+                    "scanned or image-only PDFs may require OCR, which is not implemented in this phase."
+                )
+
+            with open(docx_path, "rb") as converted:
+                content = converted.read()
+        except HTTPException:
+            raise
+        except Exception as err:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "PDF conversion failed. Try a text-based PDF or upload DOCX directly. "
+                    "Scanned/image-only PDFs may not convert well because OCR is not implemented. "
+                    f"{str(err)[:300]}"
+                ),
+            )
+
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{docx_name}"'},
+    )
 
 
 def build_client() -> OpenAI:
@@ -141,7 +207,8 @@ def llm_chat(payload: ChatRequest):
                     detail=f"Model provider request failed: {str(retry_error)[:500]}",
                 )
 
-    message = response.choices[0].message if response.choices else None
+    choice = response.choices[0] if response.choices else None
+    message = choice.message if choice else None
     content = getattr(message, "content", "") if message else ""
 
     return {
@@ -149,5 +216,6 @@ def llm_chat(payload: ChatRequest):
         "provider": "online-api",
         "model": model,
         "stage": payload.stage,
+        "finish_reason": getattr(choice, "finish_reason", None) if choice else None,
         "usage": response.usage.model_dump() if getattr(response, "usage", None) else None,
     }

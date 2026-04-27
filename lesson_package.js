@@ -36,6 +36,8 @@ export function buildLessonPackage({
   packageType,
   documentSourceType,
   documentFileName,
+  originalFileName,
+  convertedDocxFileName,
   meta,
 }) {
   const base = {
@@ -57,6 +59,8 @@ export function buildLessonPackage({
       notes: meta?.reason || "",
       documentSourceType: documentSourceType || "text",
       documentFileName: documentFileName || "",
+      originalFileName: originalFileName || "",
+      convertedDocxFileName: convertedDocxFileName || "",
       pipelineVersion: meta?.pipelineVersion || "",
       translationPromptVersion: meta?.translationPromptVersion || "",
       enrichmentPromptVersion: meta?.enrichmentPromptVersion || "",

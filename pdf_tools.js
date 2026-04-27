@@ -1,17 +1,13 @@
 /**
  * PDF tools for this demo.
  *
- * 1) `extractTextFromPdf(file)` - parse uploaded PDF into plain text
- * 2) `parsePdfForOverlay(file)` - parse pages/blocks for layout-preserving overlay export
- * 3) `exportLessonToPdf(packageData, options)` - export lesson package as a PDF handout
- * 4) `exportOverlayTranslatedPdf(...)` - overlay translated text onto source-page background
+ * `exportLessonToPdf(packageData, options)` exports teacher/student lesson
+ * packages as PDF handouts. PDF uploads are converted to DOCX by the backend
+ * and then processed through the DOCX workflow.
  */
 
 import { jsPDF } from "https://esm.sh/jspdf@2.5.2";
 
-const PDF_WORKER_SRC =
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-const PDFJS_MODULE_URL = "https://esm.sh/pdfjs-dist@3.11.174";
 const FONT_CONFIG = {
   Chinese: {
     family: "NotoSansCJKsc",
@@ -41,39 +37,6 @@ const FONT_CONFIG = {
 
 // Keep a separate cache per font family so languages do not reuse the wrong font file.
 const fontBase64Cache = {};
-
-function resolvePdfJsApi(moduleValue) {
-  if (!moduleValue) return null;
-  // Some CDN bundles expose PDF.js on `default`, others on the module root.
-  if (typeof moduleValue.getDocument === "function") {
-    return moduleValue;
-  }
-  if (moduleValue.default && typeof moduleValue.default.getDocument === "function") {
-    return moduleValue.default;
-  }
-  return null;
-}
-
-let pdfJsApiPromise = null;
-async function getPdfJsApi() {
-  if (!pdfJsApiPromise) {
-    pdfJsApiPromise = import(PDFJS_MODULE_URL)
-      .then((moduleValue) => resolvePdfJsApi(moduleValue))
-      .catch(() => null);
-  }
-  return pdfJsApiPromise;
-}
-
-function initializePdfWorker(pdfjsApi) {
-  // Guarded initialization: do not crash app startup if PDF.js is unavailable.
-  try {
-    if (pdfjsApi && pdfjsApi.GlobalWorkerOptions) {
-      pdfjsApi.GlobalWorkerOptions.workerSrc = PDF_WORKER_SRC;
-    }
-  } catch (_err) {
-    // Ignore worker initialization errors; handled when PDF features are used.
-  }
-}
 
 function hasCjkCharacters(text) {
   // Han + Hiragana + Katakana + Hangul ranges.
@@ -171,39 +134,6 @@ async function configurePdfFont(doc, packageData) {
   return fontConfig.family;
 }
 
-export async function extractTextFromPdf(file) {
-  const pdfjsApi = await getPdfJsApi();
-  if (!pdfjsApi || typeof pdfjsApi.getDocument !== "function") {
-    throw new Error("PDF support is currently unavailable. Please paste text manually.");
-  }
-  initializePdfWorker(pdfjsApi);
-
-  if (!file) {
-    throw new Error("No PDF file selected.");
-  }
-  if (!file.name.toLowerCase().endsWith(".pdf")) {
-    throw new Error("Please upload a .pdf file.");
-  }
-
-  const arrayBuffer = await file.arrayBuffer();
-  const loadingTask = pdfjsApi.getDocument({ data: new Uint8Array(arrayBuffer) });
-  const pdf = await loadingTask.promise;
-
-  const pages = [];
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const content = await page.getTextContent();
-    const text = content.items.map((item) => item.str).join(" ");
-    pages.push(text.replace(/\s+/g, " ").trim());
-  }
-
-  const merged = pages.join("\n\n").trim();
-  if (!merged) {
-    throw new Error("The PDF was parsed, but no readable text was found.");
-  }
-  return merged;
-}
-
 function drawWrappedText(doc, text, x, y, maxWidth, lineHeight) {
   const lines = doc.splitTextToSize(text || "", maxWidth);
   doc.text(lines, x, y);
@@ -220,156 +150,6 @@ function ensurePageSpace(doc, y, required, marginBottom) {
 
 function normalizeText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
-}
-
-function looksLikeFormula(text) {
-  const value = normalizeText(text);
-  if (!value) return false;
-  if (/[=∑∫√≤≥≈∞πθλμ∆±]/.test(value)) return true;
-  const compact = value.replace(/\s+/g, "");
-  const letters = (compact.match(/[A-Za-z\u4e00-\u9fff]/g) || []).length;
-  const mathish = (compact.match(/[0-9+\-*/^=(){}\[\]<>%]/g) || []).length;
-  return mathish >= 4 && letters <= mathish / 2;
-}
-
-function groupTextItemsToLines(rawItems) {
-  const sorted = [...rawItems].sort((a, b) => {
-    if (Math.abs(a.y - b.y) > 2) return a.y - b.y;
-    return a.x - b.x;
-  });
-
-  const lines = [];
-  for (const item of sorted) {
-    const last = lines[lines.length - 1];
-    const tolerance = Math.max(3, item.fontSize * 0.35);
-    if (!last || Math.abs(last.y - item.y) > tolerance) {
-      lines.push({ y: item.y, items: [item] });
-    } else {
-      last.items.push(item);
-    }
-  }
-
-  return lines.map((line) => {
-    const items = line.items.sort((a, b) => a.x - b.x);
-    let text = "";
-    let prevEnd = null;
-    for (const item of items) {
-      if (text) {
-        const gap = prevEnd === null ? 0 : item.x - prevEnd;
-        if (gap > item.fontSize * 0.22) {
-          text += " ";
-        }
-      }
-      text += item.text;
-      prevEnd = item.x + item.width;
-    }
-
-    const minX = Math.min(...items.map((item) => item.x));
-    const maxX = Math.max(...items.map((item) => item.x + item.width));
-    const maxFontSize = Math.max(...items.map((item) => item.fontSize));
-    const topY = Math.min(...items.map((item) => item.y - item.fontSize * 0.82));
-    const height = Math.max(maxFontSize * 1.25, 10);
-
-    return {
-      text: normalizeText(text),
-      x: minX,
-      y: topY,
-      width: Math.max(20, maxX - minX),
-      height,
-      fontSize: Math.max(8, maxFontSize),
-    };
-  });
-}
-
-export async function parsePdfForOverlay(file) {
-  const pdfjsApi = await getPdfJsApi();
-  if (!pdfjsApi || typeof pdfjsApi.getDocument !== "function") {
-    throw new Error("PDF support is currently unavailable. Please paste text manually.");
-  }
-  initializePdfWorker(pdfjsApi);
-
-  if (!file) {
-    throw new Error("No PDF file selected.");
-  }
-  if (!file.name.toLowerCase().endsWith(".pdf")) {
-    throw new Error("Please upload a .pdf file.");
-  }
-
-  const arrayBuffer = await file.arrayBuffer();
-  const loadingTask = pdfjsApi.getDocument({ data: new Uint8Array(arrayBuffer) });
-  const pdf = await loadingTask.promise;
-
-  const pages = [];
-  const fullTextParts = [];
-  const allBlocks = [];
-
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const viewport = page.getViewport({ scale: 1.5 });
-
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-    canvas.width = Math.ceil(viewport.width);
-    canvas.height = Math.ceil(viewport.height);
-    if (!context) {
-      throw new Error("Could not create canvas for PDF rendering.");
-    }
-
-    await page.render({ canvasContext: context, viewport }).promise;
-    const imageDataUrl = canvas.toDataURL("image/jpeg", 0.92);
-
-    const textContent = await page.getTextContent();
-    const rawItems = [];
-    for (const item of textContent.items || []) {
-      const value = normalizeText(item.str);
-      if (!value) continue;
-      const tx = pdfjsApi.Util.transform(viewport.transform, item.transform);
-      const x = tx[4];
-      const yFromBottom = tx[5];
-      const fontSize = Math.sqrt(tx[2] * tx[2] + tx[3] * tx[3]) || 10;
-      const width = Math.max(4, (item.width || value.length * 4) * viewport.scale);
-      // jsPDF uses top-left origin; convert from PDF bottom-left coordinates.
-      const y = viewport.height - yFromBottom;
-      rawItems.push({ text: value, x, y, width, fontSize });
-    }
-
-    const lineBlocks = groupTextItemsToLines(rawItems)
-      .filter((block) => block.text)
-      .map((block, idx) => {
-        const id = `p${pageNumber}-b${idx}`;
-        const isFormula = looksLikeFormula(block.text);
-        if (!isFormula) fullTextParts.push(block.text);
-        allBlocks.push({
-          id,
-          text: block.text,
-          isFormula,
-          pageNumber,
-        });
-        return {
-          ...block,
-          id,
-          pageNumber,
-          isFormula,
-        };
-      });
-
-    pages.push({
-      pageNumber,
-      width: viewport.width,
-      height: viewport.height,
-      imageDataUrl,
-      blocks: lineBlocks,
-    });
-  }
-
-  const fullText = normalizeText(fullTextParts.join(" "));
-  return {
-    fileName: file.name,
-    fullText,
-    pageCount: pages.length,
-    pages,
-    allBlocks,
-  };
 }
 
 export async function exportLessonToPdf(packageData, options = {}) {
@@ -479,83 +259,4 @@ export async function exportLessonToPdf(packageData, options = {}) {
   const safeName = title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 60) || "lesson-package";
   const suffix = includeAnswerKey ? "teacher" : "student";
   doc.save(`${safeName}-${suffix}.pdf`);
-}
-
-export async function exportOverlayTranslatedPdf({
-  lessonTitle,
-  targetLanguage,
-  mode,
-  pdfOverlayData,
-  blockTranslations,
-  audienceLabel = "Teacher",
-}) {
-  if (typeof jsPDF !== "function") {
-    throw new Error("PDF export is currently unavailable.");
-  }
-  if (!pdfOverlayData || !Array.isArray(pdfOverlayData.pages) || pdfOverlayData.pages.length === 0) {
-    throw new Error("No PDF overlay data is available. Upload a PDF first.");
-  }
-
-  const translationMap = blockTranslations || {};
-  const firstPage = pdfOverlayData.pages[0];
-  const doc = new jsPDF({
-    unit: "pt",
-    format: [firstPage.width, firstPage.height],
-    orientation: firstPage.width > firstPage.height ? "landscape" : "portrait",
-  });
-
-  const fontProbe = {
-    lessonTitle: lessonTitle || "Untitled Lesson",
-    targetLanguage: targetLanguage || "Chinese",
-    translation: Object.values(translationMap).join(" "),
-    simplifiedExplanation: "",
-    glossary: [],
-    quiz: [],
-    mode,
-  };
-  const activeFontFamily = await configurePdfFont(doc, fontProbe);
-
-  for (let pageIdx = 0; pageIdx < pdfOverlayData.pages.length; pageIdx += 1) {
-    const page = pdfOverlayData.pages[pageIdx];
-    if (pageIdx > 0) {
-      doc.addPage(
-        [page.width, page.height],
-        page.width > page.height ? "landscape" : "portrait"
-      );
-    }
-
-    // Step 1: preserve original page visuals.
-    doc.addImage(page.imageDataUrl, "JPEG", 0, 0, page.width, page.height);
-
-    // Step 2: overlay translated text while leaving formula blocks untouched.
-    for (const block of page.blocks || []) {
-      if (block.isFormula) continue;
-      const translated = normalizeText(translationMap[block.id] || block.text);
-      if (!translated) continue;
-
-      const padding = 1.5;
-      const x = block.x - padding;
-      const y = block.y - padding;
-      const width = Math.max(12, block.width + padding * 2);
-      const baseHeight = Math.max(9, block.height + padding * 2);
-
-      doc.setFillColor(255, 255, 255);
-      doc.rect(x, y, width, baseHeight, "F");
-
-      doc.setTextColor(18, 40, 66);
-      doc.setFont(activeFontFamily, "normal");
-      const fontSize = Math.max(8, Math.min(16, block.fontSize * 0.9));
-      doc.setFontSize(fontSize);
-
-      const lines = doc.splitTextToSize(translated, Math.max(20, block.width));
-      const lineHeight = Math.max(9, fontSize * 1.12);
-      const maxLines = Math.max(1, Math.floor((baseHeight + 6) / lineHeight));
-      const clipped = lines.slice(0, maxLines);
-      doc.text(clipped, block.x, block.y + fontSize * 0.85);
-    }
-  }
-
-  const base = (lessonTitle || "translated-overlay").replace(/[\\/:*?"<>|]/g, "_").slice(0, 60);
-  const audience = String(audienceLabel || "teacher").toLowerCase();
-  doc.save(`${base}-overlay-${audience}.pdf`);
 }
