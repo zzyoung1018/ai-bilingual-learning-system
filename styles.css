@@ -461,6 +461,23 @@ select {
   animation: progressSweep 1.2s ease-in-out infinite;
 }
 
+.toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 20;
+  max-width: min(340px, calc(100vw - 32px));
+  border: 1px solid #b5daf0;
+  border-radius: 12px;
+  background: #e9f6ff;
+  color: #124d73;
+  box-shadow: var(--shadow);
+  padding: 11px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
 @keyframes progressSweep {
   0% {
     transform: translateX(-120%);
@@ -483,5 +500,12 @@ select {
 
   .generationProgress__meta span:first-child {
     grid-column: 1 / -1;
+  }
+
+  .toast {
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    max-width: none;
   }
 }

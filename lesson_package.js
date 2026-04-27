@@ -57,6 +57,10 @@ export function buildLessonPackage({
       notes: meta?.reason || "",
       documentSourceType: documentSourceType || "text",
       documentFileName: documentFileName || "",
+      pipelineVersion: meta?.pipelineVersion || "",
+      translationPromptVersion: meta?.translationPromptVersion || "",
+      enrichmentPromptVersion: meta?.enrichmentPromptVersion || "",
+      cacheVersion: meta?.cacheVersion || "",
     },
   };
 

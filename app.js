@@ -119,6 +119,8 @@ const UI_TEXT = {
     exportTeacherHandoutPdf: "Export Teacher Handout (PDF)",
     exportStudentHandoutPdf: "Export Student Handout (PDF)",
     exportLayoutPreservingPdfExperimental: "Export Layout-Preserving PDF (Experimental)",
+    exportDebugReport: "Export Debug Report",
+    debugReportExported: "Debug report exported.",
     studentLearningWorkspace: "Student Learning Workspace",
     studentWorkspaceDescription:
       "Import a teacher-prepared lesson package and complete the guided bilingual learning activities.",
@@ -356,6 +358,8 @@ const UI_TEXT = {
     exportStudentHandoutPdf: "Оқушыға арналған материалды экспорттау (PDF)",
     exportLayoutPreservingPdfExperimental:
       "Пішімі сақталған PDF экспорттау (эксперименттік)",
+    exportDebugReport: "Тексеру есебін экспорттау",
+    debugReportExported: "Тексеру есебі экспортталды.",
     studentLearningWorkspace: "Оқушының оқу жұмыс аймағы",
     studentWorkspaceDescription:
       "Мұғалім дайындаған сабақ пакетін импорттап, бағытталған екітілді оқу тапсырмаларын орындаңыз.",
@@ -539,7 +543,10 @@ const DOCX_TRANSLATION_BATCH_MAX_CHARS = 2400;
 const DOCX_TRANSLATION_SHORT_BLOCK_MAX_CHARS = 180;
 const DOCX_TRANSLATION_SHORT_BATCH_MAX_BLOCKS = 18;
 const DOCX_TRANSLATION_LONG_BLOCK_MIN_CHARS = 1200;
+const PIPELINE_VERSION = "phase-3-static-ollama-v1";
 const TRANSLATION_PROMPT_VERSION = "stage-a-block-translation-v2";
+const ENRICHMENT_PROMPT_VERSION = "stage-b-teaching-support-v2";
+const CACHE_VERSION = "translation-cache-v2";
 const TRANSLATION_CACHE_STORAGE_KEY = "aiBilingual.translationCache.v1";
 const TRANSLATION_CACHE_MAX_ENTRIES = 600;
 const OLLAMA_CONFIG = {
@@ -561,6 +568,9 @@ const OLLAMA_ENRICHMENT_OPTIONS = {
   num_predict: 2048,
 };
 const PLAIN_TEXT_TRANSLATION_CHUNK_MAX_CHARS = 1800;
+const ENRICHMENT_FULL_CONTEXT_MAX_CHARS = 7000;
+const ENRICHMENT_EXCERPT_MAX_CHARS = 1100;
+const ENRICHMENT_MAX_HEADINGS = 12;
 
 const TARGET_LANGUAGE_CONFIG = {
   English: {
@@ -721,7 +731,9 @@ function buildTranslationCacheKey({ block, targetLanguage, preserveFormulas }) {
   const normalizedText = normalizeForComparison(block?.text);
   if (!normalizedText) return "";
   return JSON.stringify({
-    version: TRANSLATION_PROMPT_VERSION,
+    cacheVersion: CACHE_VERSION,
+    pipelineVersion: PIPELINE_VERSION,
+    translationPromptVersion: TRANSLATION_PROMPT_VERSION,
     model: OLLAMA_CONFIG.model,
     targetLanguage,
     preserveFlag: getTranslationPreserveFlag(block, preserveFormulas),
@@ -733,7 +745,8 @@ function isValidTranslationCacheEntry(entry) {
   return Boolean(
     entry &&
     typeof entry === "object" &&
-    entry.version === TRANSLATION_PROMPT_VERSION &&
+    entry.cacheVersion === CACHE_VERSION &&
+    entry.translationPromptVersion === TRANSLATION_PROMPT_VERSION &&
     entry.model === OLLAMA_CONFIG.model &&
     entry.action === "translate" &&
     typeof entry.translatedText === "string" &&
@@ -971,7 +984,9 @@ function mergeTranslationWorkResult({
       })
     ) {
       cache[group.cacheKey] = {
-        version: TRANSLATION_PROMPT_VERSION,
+        cacheVersion: CACHE_VERSION,
+        pipelineVersion: PIPELINE_VERSION,
+        translationPromptVersion: TRANSLATION_PROMPT_VERSION,
         model: OLLAMA_CONFIG.model,
         targetLanguage,
         action: "translate",
@@ -990,6 +1005,8 @@ function mergeTranslationWorkResult({
       reason: "",
       provider: "ollama",
       model: OLLAMA_CONFIG.model,
+      pipelineVersion: PIPELINE_VERSION,
+      translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       responseItemCount: apiResult.meta?.responseItemCount || 0,
       expectedItemCount: plan.uniqueBlocks.length,
       itemCountMismatch: Boolean(apiResult.meta?.itemCountMismatch),
@@ -1115,6 +1132,10 @@ function createLocalFallbackLesson({
     meta: {
       usedFallback: true,
       reason: getRuntimeUiText().localFallbackLessonGenerated,
+      pipelineVersion: PIPELINE_VERSION,
+      translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+      enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
+      cacheVersion: CACHE_VERSION,
     },
   };
 }
@@ -1222,6 +1243,99 @@ async function callOllamaChat(messages, { think, options, format, signal }) {
   return content;
 }
 
+function clipText(text, maxChars) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  if (value.length <= maxChars) return value;
+  return `${value.slice(0, Math.max(0, maxChars - 1)).trim()}...`;
+}
+
+function selectRepresentativeExcerpts(text, maxChars = ENRICHMENT_EXCERPT_MAX_CHARS) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  if (!value) return [];
+  if (value.length <= maxChars * 2) {
+    return [{ label: "full", text: clipText(value, maxChars * 2) }];
+  }
+
+  const segmentLength = Math.min(maxChars, Math.ceil(value.length / 3));
+  const middleStart = Math.max(0, Math.floor(value.length / 2 - segmentLength / 2));
+  return [
+    { label: "beginning", text: clipText(value.slice(0, segmentLength), maxChars) },
+    { label: "middle", text: clipText(value.slice(middleStart, middleStart + segmentLength), maxChars) },
+    { label: "end", text: clipText(value.slice(Math.max(0, value.length - segmentLength)), maxChars) },
+  ];
+}
+
+function extractHeadingCandidates(sourceText, maxItems = ENRICHMENT_MAX_HEADINGS) {
+  return String(sourceText || "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (!line || line.length > 120) return false;
+      if (/^[#\d.\-\s]+$/.test(line)) return false;
+      return line.length <= 70 || /^[A-Z0-9][^.!?。！？]{2,}$/.test(line);
+    })
+    .slice(0, maxItems);
+}
+
+function buildTeachingSupportContext({ lessonTitle, sourceText, translation, targetLanguage }) {
+  const source = String(sourceText || "").trim();
+  const translated = String(translation || "").trim();
+  const totalChars = source.length + translated.length;
+  const compact = totalChars > ENRICHMENT_FULL_CONTEXT_MAX_CHARS;
+  const headings = extractHeadingCandidates(source);
+
+  if (!compact) {
+    return {
+      compact,
+      summary: {
+        lessonTitle,
+        targetLanguage,
+        sourceCharCount: source.length,
+        translationCharCount: translated.length,
+        headings,
+      },
+      sourceContext: source,
+      translationContext: translated,
+    };
+  }
+
+  return {
+    compact,
+    summary: {
+      lessonTitle,
+      targetLanguage,
+      sourceCharCount: source.length,
+      translationCharCount: translated.length,
+      headings,
+    },
+    sourceContext: selectRepresentativeExcerpts(source),
+    translationContext: selectRepresentativeExcerpts(translated),
+  };
+}
+
+function getEnrichmentLanguageInstruction(targetLanguage) {
+  if (targetLanguage === "Kazakh") {
+    return (
+      "Use natural Kazakh in Cyrillic script for explanations, quiz questions, and answers. " +
+      "Do not write Russian. Do not use Kazakh Latin script. " +
+      'Glossary terms may preserve the English source term alongside the Kazakh term, for example: "photosynthesis / фотосинтез".'
+    );
+  }
+  if (targetLanguage === "Russian") {
+    return (
+      "Use standard Russian Cyrillic for explanations, quiz questions, and answers. " +
+      "Glossary terms may preserve the English source term alongside the Russian term when useful."
+    );
+  }
+  if (targetLanguage === "English") {
+    return "Use natural English for explanations, quiz questions, and answers.";
+  }
+  return (
+    `Use natural ${targetLanguage} for explanations, quiz questions, and answers. ` +
+    "Glossary terms may preserve the English source term alongside the translated term when useful."
+  );
+}
+
 function buildLessonEnrichmentMessages({
   lessonTitle,
   sourceText,
@@ -1230,6 +1344,13 @@ function buildLessonEnrichmentMessages({
   mode,
   quizSettings,
 }) {
+  const context = buildTeachingSupportContext({
+    lessonTitle,
+    sourceText,
+    translation,
+    targetLanguage,
+  });
+  const languageInstruction = getEnrichmentLanguageInstruction(targetLanguage);
   const modeHint =
     mode === "teacher"
       ? "Teacher mode: include classroom facilitation language and slightly more depth."
@@ -1245,19 +1366,22 @@ function buildLessonEnrichmentMessages({
         "Use this exact top-level schema: " +
         '{"glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"meta":{}}. ' +
         "This is the teaching-support generation stage, not the translation stage. Do not include a translation field and do not retranslate or rewrite the completed translation. " +
-        "Rules: glossary should have 3-6 key terms. Quiz must follow requested question count, difficulty, and question types. " +
-        "For multiple_choice, provide exactly 4 options and a valid answerIndex. For true_false, provide exactly 2 options and a valid answerIndex. For short_answer, provide answerText.",
+        "Rules: glossary should have 3-6 key terms. Make glossary terms bilingual when useful, such as source term / translated term. Explanations must be in the target language. " +
+        "Quiz must follow requested question count, difficulty, and question types, and must be based on the provided lesson content rather than generic bilingual education. " +
+        "For multiple_choice, provide exactly 4 options, exactly one clearly correct answer, plausible incorrect distractors, and a valid answerIndex. Avoid ambiguous questions. " +
+        "For true_false, provide exactly 2 options in the target language when practical and a valid answerIndex. For short_answer, provide a concise answerText and avoid broad prompts like explain the topic. " +
+        "For long lessons, cover different parts of the context rather than only the beginning.",
     },
     {
       role: "user",
       content:
         `Lesson title: ${lessonTitle}\n\n` +
-        `Original source text:\n${sourceText}\n\n` +
-        `Completed ${targetLanguage} translation for reference only. Do not return it in JSON:\n${translation}\n\n` +
         `Target language: ${targetLanguage}\n` +
+        `Language rules: ${languageInstruction}\n` +
         `Learning mode: ${mode}\n` +
         `${modeHint}\n` +
         `Quiz settings:\n${JSON.stringify(quizSettings, null, 2)}\n\n` +
+        `Teaching-support context (${context.compact ? "compact representative excerpts" : "full context"}):\n${JSON.stringify(context, null, 2)}\n\n` +
         "Generate only glossary, simplifiedExplanation, quiz, and optional meta as valid strict JSON. Do not include translation in the response. Do not use markdown, comments, trailing commas, or unquoted strings.",
     },
   ];
@@ -1365,6 +1489,8 @@ async function generateTeachingSupportWithOllama(fallbackInput, translation, run
       reason: "",
       provider: "ollama",
       model: OLLAMA_CONFIG.model,
+      pipelineVersion: PIPELINE_VERSION,
+      enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
     },
   };
 }
@@ -1666,6 +1792,8 @@ async function translateBlocksWithOllama({
       reason: "",
       provider: "ollama",
       model: OLLAMA_CONFIG.model,
+      pipelineVersion: PIPELINE_VERSION,
+      translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       responseItemCount,
       expectedItemCount: blocks.length,
       itemCountMismatch: responseItemCount !== blocks.length,
@@ -1674,6 +1802,96 @@ async function translateBlocksWithOllama({
       debugEntries,
     },
   };
+}
+
+function normalizeGlossaryItems(rawGlossary) {
+  if (!Array.isArray(rawGlossary)) return [];
+  return rawGlossary
+    .map((item) => ({
+      term: String(item?.term || "").replace(/\s+/g, " ").trim(),
+      explanation: String(item?.explanation || "").replace(/\s+/g, " ").trim(),
+    }))
+    .filter((item) => item.term && item.explanation)
+    .slice(0, 6);
+}
+
+function dedupeTextOptions(options) {
+  const seen = new Set();
+  const result = [];
+  (Array.isArray(options) ? options : []).forEach((option) => {
+    const text = String(option || "").replace(/\s+/g, " ").trim();
+    const key = text.toLowerCase();
+    if (!text || seen.has(key)) return;
+    seen.add(key);
+    result.push(text);
+  });
+  return result;
+}
+
+function getTrueFalseOptions(targetLanguage) {
+  if (targetLanguage === "Kazakh") return ["Дұрыс", "Бұрыс"];
+  if (targetLanguage === "Russian") return ["Верно", "Неверно"];
+  return ["True", "False"];
+}
+
+function normalizeQuizItems(rawQuiz, quizSettings, targetLanguage) {
+  if (!Array.isArray(rawQuiz)) return [];
+  const allowedTypes = new Set(quizSettings.questionTypes || ["multiple_choice"]);
+  const normalized = [];
+
+  for (const item of rawQuiz) {
+    if (!item || typeof item !== "object") continue;
+    const type = String(item.type || "multiple_choice").trim().toLowerCase();
+    if (!["multiple_choice", "true_false", "short_answer"].includes(type)) continue;
+    if (!allowedTypes.has(type)) continue;
+
+    const question = String(item.question || "").replace(/\s+/g, " ").trim();
+    const explanation = String(item.explanation || "").replace(/\s+/g, " ").trim();
+    if (!question) continue;
+    if (/^(explain the topic|what is this about)\??$/i.test(question)) continue;
+
+    if (type === "short_answer") {
+      const answerText = clipText(item.answerText || item.answer || "", 220);
+      if (!answerText) continue;
+      normalized.push({ type, question, answerText, explanation });
+      continue;
+    }
+
+    if (type === "true_false") {
+      const defaults = getTrueFalseOptions(targetLanguage);
+      const options = dedupeTextOptions(item.options).slice(0, 2);
+      while (options.length < 2) {
+        options.push(defaults[options.length]);
+      }
+      let answerIndex = Number.isInteger(item.answerIndex) ? item.answerIndex : 0;
+      answerIndex = answerIndex === 1 ? 1 : 0;
+      normalized.push({ type, question, options: options.slice(0, 2), answerIndex, explanation });
+      continue;
+    }
+
+    const options = dedupeTextOptions(item.options);
+    const rawAnswerIndex = Number.isInteger(item.answerIndex) ? item.answerIndex : 0;
+    const answerText = String(item.answerText || item.answer || "").trim();
+    let answerIndex = rawAnswerIndex;
+    if (answerText) {
+      const matched = options.findIndex(
+        (option) => option.toLowerCase() === answerText.toLowerCase()
+      );
+      if (matched >= 0) answerIndex = matched;
+    }
+    if (options.length < 4) continue;
+    const trimmedOptions = options.slice(0, 4);
+    if (answerIndex < 0 || answerIndex >= trimmedOptions.length) answerIndex = 0;
+    normalized.push({
+      type,
+      question,
+      options: trimmedOptions,
+      answerIndex,
+      explanation,
+    });
+  }
+
+  return normalized.slice(0, quizSettings.questionCount || defaultQuizSettings.questionCount);
 }
 
 function normalizeLessonResult(raw, fallbackInput) {
@@ -1687,47 +1905,8 @@ function normalizeLessonResult(raw, fallbackInput) {
     raw.simplifiedExplanation || raw.explanation || ""
   ).trim();
 
-  const glossary = Array.isArray(raw.glossary)
-    ? raw.glossary
-        .map((item) => ({
-          term: String(item?.term || "").trim(),
-          explanation: String(item?.explanation || "").trim(),
-        }))
-        .filter((item) => item.term && item.explanation)
-    : [];
-
-  const quiz = Array.isArray(raw.quiz)
-    ? raw.quiz
-        .map((item) => {
-          const type = String(item?.type || "multiple_choice");
-          const question = String(item?.question || "").trim();
-          const explanation = String(item?.explanation || "").trim();
-
-          if (type === "short_answer") {
-            return {
-              type,
-              question,
-              answerText: String(item?.answerText || "").trim(),
-              explanation,
-            };
-          }
-
-          const options = Array.isArray(item?.options)
-            ? item.options.map((x) => String(x)).filter(Boolean)
-            : [];
-          const answerIndex = Number.isInteger(item?.answerIndex) ? item.answerIndex : 0;
-
-          return { type, question, options, answerIndex, explanation };
-        })
-        .filter((item) => {
-          if (!item.question) return false;
-          if (item.type === "short_answer") return Boolean(item.answerText);
-          if (item.type === "true_false") {
-            return Array.isArray(item.options) && item.options.length >= 2;
-          }
-          return Array.isArray(item.options) && item.options.length >= 2;
-        })
-    : [];
+  const glossary = normalizeGlossaryItems(raw.glossary);
+  const quiz = normalizeQuizItems(raw.quiz, quizSettings, fallbackInput.targetLanguage);
 
   if (!translation || glossary.length === 0 || !simplifiedExplanation || quiz.length === 0) {
     return createLocalFallbackLesson(fallbackInput);
@@ -1745,7 +1924,13 @@ function normalizeLessonResult(raw, fallbackInput) {
     quizSettings,
     quiz,
     mode: fallbackInput.mode,
-    meta: raw.meta || { usedFallback: false, reason: "" },
+    meta: {
+      ...(raw.meta || {}),
+      usedFallback: Boolean(raw.meta?.usedFallback),
+      reason: raw.meta?.reason || "",
+      pipelineVersion: PIPELINE_VERSION,
+      enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
+    },
   };
 }
 
@@ -2057,6 +2242,108 @@ function logDocxExtractionAudit(parsed) {
   });
   console.groupEnd();
 }
+
+function safeDownloadName(value, fallback = "debug-report") {
+  return String(value || fallback).replace(/[\\/:*?"<>|]/g, "_").slice(0, 60) || fallback;
+}
+
+function downloadJsonFile(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+function buildDebugReport({
+  lesson,
+  teacherMeta,
+  statusMessage,
+  statusType,
+  generationProgress,
+}) {
+  const assets = lesson?.documentAssets || {};
+  const translationMeta = teacherMeta?.translationMeta || {};
+  const enrichmentMeta = teacherMeta?.enrichmentMeta || {};
+  const debugSummary = translationMeta.debugSummary || {};
+  const cacheSummary = translationMeta.cacheSummary || {};
+  const retrySummary = translationMeta.retrySummary || {};
+  const suspiciousBlocks = Array.isArray(translationMeta.suspiciousBlocks)
+    ? translationMeta.suspiciousBlocks
+    : [];
+  const debugEntries = Array.isArray(translationMeta.debugEntries)
+    ? translationMeta.debugEntries
+    : Array.isArray(assets.translationDebugEntries)
+    ? assets.translationDebugEntries
+    : [];
+
+  const totalSourceBlocks =
+    Number(debugSummary.total || 0) ||
+    debugEntries.length ||
+    Number(assets.docxData?.traversalSummary?.totalBlocks || 0) ||
+    Number(assets.pdfOverlayData?.allBlocks?.length || 0) ||
+    0;
+
+  return {
+    timestamp: new Date().toISOString(),
+    pipelineVersion: PIPELINE_VERSION,
+    translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+    enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
+    cacheVersion: CACHE_VERSION,
+    modelName: OLLAMA_CONFIG.model,
+    ollamaBaseUrl: OLLAMA_CONFIG.baseUrl,
+    lessonTitle: lesson?.lessonTitle || "",
+    targetLanguage: lesson?.targetLanguage || "",
+    sourceType: assets.sourceType || "text",
+    documentFileName: assets.fileName || "",
+    counts: {
+      totalSourceBlocks,
+      translatedBlockCount: Number(debugSummary.translated || 0),
+      preservedBlockCount: Number(debugSummary.preserved || 0),
+      unchangedAfterTranslateCount: Number(debugSummary.unchangedAfterTranslate || 0),
+      cacheHitCount: Number(cacheSummary.hits || 0),
+      dedupeReuseCount: Number(cacheSummary.dedupeReused || 0),
+      uniqueBlockCount: Number(cacheSummary.uniqueRequested || 0),
+      retryCount:
+        Number(retrySummary.attempted || 0) +
+        Number(translationMeta.batchSummary?.retriedBlocks || 0),
+      retryFixedCount: Number(retrySummary.fixed || 0),
+      failedBlockCount:
+        Number(retrySummary.preservedAfterRetry || 0) +
+        Number(translationMeta.batchSummary?.failedBlocks || 0),
+      suspiciousBlockCount:
+        Number(debugSummary.suspicious || 0) || suspiciousBlocks.length,
+    },
+    fallback: {
+      usedFallback: Boolean(teacherMeta?.usedFallback),
+      reason: teacherMeta?.reason || "",
+    },
+    generationStageSummary: {
+      currentStage: generationProgress?.stage || "",
+      progressPercent: generationProgress?.percent || 0,
+      progressLabel: generationProgress?.label || "",
+      translationProvider: translationMeta.provider || "",
+      enrichmentProvider: enrichmentMeta.provider || "",
+      batchSummary: translationMeta.batchSummary || null,
+    },
+    status: {
+      type: statusType || "",
+      message: statusMessage || "",
+    },
+    suspiciousBlocks: suspiciousBlocks.map((item) => ({
+      id: item.id,
+      index: item.index,
+      reasons: item.reasons || [],
+    })),
+  };
+}
+
 function Header(props) {
   const { page, onPageChange, mode, onModeChange, t, uiLanguage, onToggleUiLanguage } = props;
   const navLabels = {
@@ -2440,6 +2727,7 @@ function TeacherWorkspace(props) {
     onExportStudentPdf,
     onExportOverlayPdf,
     onExportDocx,
+    onExportDebugReport,
     teacherQuizAnswers,
     onTeacherQuizAnswer,
     statusMessage,
@@ -2581,6 +2869,9 @@ function TeacherWorkspace(props) {
           </button>
           <button className="ghostBtn" onClick=${onExportOverlayPdf}>
             ${t.exportLayoutPreservingPdfExperimental}
+          </button>
+          <button className="ghostBtn" onClick=${onExportDebugReport}>
+            ${t.exportDebugReport}
           </button>
         </div>
       `}
@@ -2787,14 +3078,23 @@ function App() {
 
   const [teacherLesson, setTeacherLesson] = useState(null);
   const [teacherQuizAnswers, setTeacherQuizAnswers] = useState({});
-  const [teacherMeta, setTeacherMeta] = useState({ usedFallback: true, reason: "" });
+  const [teacherMeta, setTeacherMeta] = useState({
+    usedFallback: true,
+    reason: "",
+    pipelineVersion: PIPELINE_VERSION,
+    translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+    enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
+    cacheVersion: CACHE_VERSION,
+  });
 
   const [studentLesson, setStudentLesson] = useState(null);
   const [studentAnswers, setStudentAnswers] = useState({});
   const [showStudentScore, setShowStudentScore] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [importError, setImportError] = useState("");
+  const [toastMessage, setToastMessage] = useState("");
   const generationRunRef = useRef({ id: 0, controller: null });
+  const toastTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (!window.location.hash) setHash("home");
@@ -2806,6 +3106,9 @@ function App() {
   useEffect(() => {
     return () => {
       generationRunRef.current.controller?.abort();
+      if (toastTimeoutRef.current) {
+        window.clearTimeout(toastTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -2886,6 +3189,17 @@ function App() {
     }));
   }
 
+  function showToast(message) {
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+    setToastMessage(message);
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToastMessage("");
+      toastTimeoutRef.current = null;
+    }, 2600);
+  }
+
   function cancelGeneration() {
     const current = generationRunRef.current;
     if (!current.controller) return;
@@ -2904,6 +3218,7 @@ function App() {
   function handleClearTranslationCache() {
     clearTranslationCacheStorage();
     setGenerationStatus("info", t.translationCacheCleared);
+    showToast(t.translationCacheCleared);
   }
 
   function handleModeChange(nextMode) {
@@ -3053,6 +3368,8 @@ function App() {
           reason: "",
           provider: "cache",
           model: OLLAMA_CONFIG.model,
+          pipelineVersion: PIPELINE_VERSION,
+          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
           debugSummary: plan.debugSummary,
           debugEntries: plan.debugEntries,
           suspiciousBlocks: [],
@@ -3090,6 +3407,8 @@ function App() {
             reason: `batch_translation_failed:${initialErr?.message || t.unknownBatchError}`,
             provider: "ollama",
             model: OLLAMA_CONFIG.model,
+            pipelineVersion: PIPELINE_VERSION,
+            translationPromptVersion: TRANSLATION_PROMPT_VERSION,
             debugSummary: plan.debugSummary,
             debugEntries: [...plan.debugEntries],
             suspiciousBlocks: [],
@@ -3184,7 +3503,9 @@ function App() {
             const cacheKey = buildTranslationCacheKey({ block, targetLanguage, preserveFormulas });
             if (cacheKey) {
               cache[cacheKey] = {
-                version: TRANSLATION_PROMPT_VERSION,
+                cacheVersion: CACHE_VERSION,
+                pipelineVersion: PIPELINE_VERSION,
+                translationPromptVersion: TRANSLATION_PROMPT_VERSION,
                 model: OLLAMA_CONFIG.model,
                 targetLanguage,
                 action: "translate",
@@ -3265,6 +3586,12 @@ function App() {
     const aggregatedDebugEntries = [];
     const aggregatedReasons = [];
     const aggregatedSummary = createEmptyDebugSummary();
+    const aggregatedCacheSummary = {
+      hits: 0,
+      dedupeReused: 0,
+      locallyPreserved: 0,
+      uniqueRequested: 0,
+    };
     let usedFallback = false;
     let retriedBlocks = 0;
     let failedBlocks = 0;
@@ -3306,6 +3633,11 @@ function App() {
         );
         aggregatedDebugEntries.push(...normalizedEntries);
         accumulateDebugSummary(aggregatedSummary, batchResult.meta?.debugSummary);
+        const cacheSummary = batchResult.meta?.cacheSummary || {};
+        aggregatedCacheSummary.hits += Number(cacheSummary.hits || 0);
+        aggregatedCacheSummary.dedupeReused += Number(cacheSummary.dedupeReused || 0);
+        aggregatedCacheSummary.locallyPreserved += Number(cacheSummary.locallyPreserved || 0);
+        aggregatedCacheSummary.uniqueRequested += Number(cacheSummary.uniqueRequested || 0);
 
         if (batchResult.meta?.usedFallback) {
           usedFallback = true;
@@ -3366,6 +3698,11 @@ function App() {
             );
             aggregatedDebugEntries.push(...normalizedEntries);
             accumulateDebugSummary(aggregatedSummary, singleResult.meta?.debugSummary);
+            const cacheSummary = singleResult.meta?.cacheSummary || {};
+            aggregatedCacheSummary.hits += Number(cacheSummary.hits || 0);
+            aggregatedCacheSummary.dedupeReused += Number(cacheSummary.dedupeReused || 0);
+            aggregatedCacheSummary.locallyPreserved += Number(cacheSummary.locallyPreserved || 0);
+            aggregatedCacheSummary.uniqueRequested += Number(cacheSummary.uniqueRequested || 0);
 
             if (singleResult.meta?.usedFallback) {
               usedFallback = true;
@@ -3423,8 +3760,13 @@ function App() {
     const meta = {
       usedFallback,
       reason: mergeReasonList(aggregatedReasons),
+      provider: "ollama",
+      model: OLLAMA_CONFIG.model,
+      pipelineVersion: PIPELINE_VERSION,
+      translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       debugEntries: aggregatedDebugEntries,
       debugSummary: aggregatedSummary,
+      cacheSummary: aggregatedCacheSummary,
       batchSummary: {
         totalBatches: batches.length,
         retriedBlocks,
@@ -3518,6 +3860,8 @@ function App() {
           aiLessonMeta = {
             usedFallback: true,
             reason: lessonErr?.message || t.lessonSupportFailed,
+            pipelineVersion: PIPELINE_VERSION,
+            enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
           };
         }
 
@@ -3557,6 +3901,12 @@ function App() {
         setTeacherMeta({
           usedFallback,
           reason: fallbackReason,
+          pipelineVersion: PIPELINE_VERSION,
+          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+          enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
+          cacheVersion: CACHE_VERSION,
+          translationMeta: translationResult.meta || {},
+          enrichmentMeta: aiLessonMeta || {},
         });
 
         if (usedFallback) {
@@ -3601,7 +3951,14 @@ function App() {
               "DOCX batched translation mode active; fallback lesson loaded after block translation failure.",
           },
         });
-        setTeacherMeta({ usedFallback: true, reason: docxErr?.message || t.docxBlockFailure });
+        setTeacherMeta({
+          usedFallback: true,
+          reason: docxErr?.message || t.docxBlockFailure,
+          pipelineVersion: PIPELINE_VERSION,
+          translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+          enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
+          cacheVersion: CACHE_VERSION,
+        });
         setGenerationStatus("error", t.docxBatchedTranslationFailed(docxErr?.message || ""), runContext);
         markGenerationProgressError(runContext);
       } finally {
@@ -3680,6 +4037,8 @@ function App() {
         lessonMeta = {
           usedFallback: true,
           reason: lessonErr?.message || t.lessonSupportFailed,
+          pipelineVersion: PIPELINE_VERSION,
+          enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
         };
       }
       const nextLesson = {
@@ -3693,11 +4052,9 @@ function App() {
           docxData: documentContext.docxData || null,
           blockTranslations:
             documentContext.sourceType === "pdf" ? translationResult.translationsById || {} : {},
-          translationDebugEntries:
-            documentContext.sourceType === "pdf" &&
-            Array.isArray(translationResult.meta?.debugEntries)
-              ? translationResult.meta.debugEntries
-              : [],
+          translationDebugEntries: Array.isArray(translationResult.meta?.debugEntries)
+            ? translationResult.meta.debugEntries
+            : [],
           formulaPreservation: "Formula-like blocks are kept unchanged during document translation.",
         },
       };
@@ -3713,6 +4070,12 @@ function App() {
       setTeacherMeta({
         usedFallback: Boolean(lessonMeta.usedFallback || documentMeta.usedFallback),
         reason: [lessonMeta.reason, documentMeta.reason].filter(Boolean).join(" | "),
+        pipelineVersion: PIPELINE_VERSION,
+        translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+        enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
+        cacheVersion: CACHE_VERSION,
+        translationMeta: documentMeta,
+        enrichmentMeta: lessonMeta || {},
       });
 
       if (lessonMeta?.usedFallback || documentMeta?.usedFallback) {
@@ -3760,9 +4123,13 @@ function App() {
           formulaPreservation: "Formula-like blocks are kept unchanged in fallback mode.",
         },
       });
-      setTeacherMeta(
-        fallback.meta || { usedFallback: true, reason: t.localFallbackUsedReason }
-      );
+      setTeacherMeta({
+        ...(fallback.meta || { usedFallback: true, reason: t.localFallbackUsedReason }),
+        pipelineVersion: PIPELINE_VERSION,
+        translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+        enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
+        cacheVersion: CACHE_VERSION,
+      });
       setGenerationStatus("error", t.couldNotReachLocalOllama(err?.message || ""), runContext);
       markGenerationProgressError(runContext);
     } finally {
@@ -3882,6 +4249,22 @@ function App() {
     }
   }
 
+  function exportDebugReport() {
+    if (!teacherLesson) return;
+    const report = buildDebugReport({
+      lesson: teacherLesson,
+      teacherMeta,
+      statusMessage,
+      statusType,
+      generationProgress,
+    });
+    const filename = `${safeDownloadName(teacherLesson.lessonTitle, "lesson")}-debug-report.json`;
+    downloadJsonFile(filename, report);
+    setStatusType("info");
+    setStatusMessage(t.debugReportExported);
+    showToast(t.debugReportExported);
+  }
+
   async function handleImportFile(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
@@ -3978,6 +4361,7 @@ function App() {
             onExportStudentPdf=${exportStudentPdf}
             onExportOverlayPdf=${exportOverlayPdf}
             onExportDocx=${exportDocx}
+            onExportDebugReport=${exportDebugReport}
             teacherQuizAnswers=${teacherQuizAnswers}
             onTeacherQuizAnswer=${handleTeacherQuizAnswer}
             statusMessage=${statusMessage}
@@ -4005,6 +4389,13 @@ function App() {
           />
         `}
       </main>
+
+      ${toastMessage &&
+      html`
+        <div className="toast" role="status" aria-live="polite">
+          ${toastMessage}
+        </div>
+      `}
     </div>
   `;
 }
