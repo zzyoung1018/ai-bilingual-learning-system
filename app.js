@@ -69,6 +69,26 @@ const UI_TEXT = {
     coreTermsForUnderstanding: "Core terms for bilingual understanding.",
     simplifiedExplanation: "Simplified Explanation",
     editableExplanation: "Editable explanation adapted to mode.",
+    learningObjectives: "Learning Objectives",
+    keyConcepts: "Key Concepts",
+    commonMisconceptions: "Common Misconceptions",
+    teacherNotes: "Teacher Notes",
+    classroomActivities: "Classroom Activities",
+    differentiatedSupport: "Differentiated Support",
+    extensionQuestions: "Extension Questions",
+    studentWorksheet: "Student Worksheet",
+    strugglingLearners: "Struggling learners",
+    advancedLearners: "Advanced learners",
+    languageSupport: "Language support",
+    durationLabel: "Duration:",
+    noLearningObjectivesGenerated: "No learning objectives generated.",
+    noKeyConceptsGenerated: "No key concepts generated.",
+    noCommonMisconceptionsGenerated: "No common misconceptions generated.",
+    noTeacherNotesGenerated: "No teacher notes generated.",
+    noClassroomActivitiesGenerated: "No classroom activities generated.",
+    noDifferentiatedSupportGenerated: "No differentiated support generated.",
+    noExtensionQuestionsGenerated: "No extension questions generated.",
+    noStudentWorksheetGenerated: "No student worksheet tasks generated.",
     quizPreview: "Quiz Preview",
     practiceViewDescription: "Practice view with current quiz settings applied.",
     writeShortAnswer: "Write your short answer...",
@@ -189,6 +209,8 @@ const UI_TEXT = {
       "DOCX batched mode: translating structured DOCX blocks in smaller requests. Preview text is display/debug only.",
     generatingTeachingSupport:
       "Stage 2/2: Generating glossary, explanation, and quiz with the online AI model...",
+    teachingSupportFallbackUsed:
+      "Translation completed, but AI teaching support was only partially generated. Basic package loaded.",
     noStructuredDocxBlocks: "No structured DOCX blocks were found for translation.",
     docxGenerationFallbackUsed: (reason) =>
       `DOCX generation fallback used. ${reason || "AI generation did not fully complete."}`,
@@ -300,6 +322,26 @@ const UI_TEXT = {
     coreTermsForUnderstanding: "Екітілді түсінуге арналған негізгі терминдер.",
     simplifiedExplanation: "Жеңілдетілген түсіндірме",
     editableExplanation: "Режимге бейімделген, өңдеуге болатын түсіндірме.",
+    learningObjectives: "Оқу мақсаттары",
+    keyConcepts: "Негізгі ұғымдар",
+    commonMisconceptions: "Жиі кездесетін қате түсініктер",
+    teacherNotes: "Мұғалімге арналған жазбалар",
+    classroomActivities: "Сыныптағы әрекеттер",
+    differentiatedSupport: "Сараланған қолдау",
+    extensionQuestions: "Кеңейту сұрақтары",
+    studentWorksheet: "Оқушы жұмыс парағы",
+    strugglingLearners: "Қиналатын оқушылар",
+    advancedLearners: "Озық оқушылар",
+    languageSupport: "Тілдік қолдау",
+    durationLabel: "Ұзақтығы:",
+    noLearningObjectivesGenerated: "Оқу мақсаттары жасалмады.",
+    noKeyConceptsGenerated: "Негізгі ұғымдар жасалмады.",
+    noCommonMisconceptionsGenerated: "Жиі кездесетін қате түсініктер жасалмады.",
+    noTeacherNotesGenerated: "Мұғалімге арналған жазбалар жасалмады.",
+    noClassroomActivitiesGenerated: "Сыныптағы әрекеттер жасалмады.",
+    noDifferentiatedSupportGenerated: "Сараланған қолдау жасалмады.",
+    noExtensionQuestionsGenerated: "Кеңейту сұрақтары жасалмады.",
+    noStudentWorksheetGenerated: "Оқушы жұмыс парағының тапсырмалары жасалмады.",
     quizPreview: "Тестті алдын ала көру",
     practiceViewDescription:
       "Ағымдағы тест параметрлерімен берілетін жаттығу көрінісі.",
@@ -426,6 +468,8 @@ const UI_TEXT = {
       "DOCX пакеттік режимі: құрылымды DOCX блоктары кішірек сұраулармен аударылып жатыр. Алдын ала көру мәтіні тек көрсету және тексеру үшін қолданылады.",
     generatingTeachingSupport:
       "2/2 кезең: онлайн AI моделі арқылы глоссарий, түсіндірме және тест жасалып жатыр...",
+    teachingSupportFallbackUsed:
+      "Аударма аяқталды, бірақ AI оқу қолдауы жартылай ғана жасалды. Негізгі пакет жүктелді.",
     noStructuredDocxBlocks:
       "Аударма үшін құрылымды DOCX блоктары табылмады.",
     docxGenerationFallbackUsed: (reason) =>
@@ -553,8 +597,8 @@ const MODEL_API_CONFIG = {
   chatUrl: `${API_BASE_URL.replace(/\/$/, "")}/api/llm/chat`,
   pdfToDocxUrl: `${API_BASE_URL.replace(/\/$/, "")}/api/pdf-to-docx`,
   translationModel: "gpt-5.5",
-  enrichmentModel: "gpt-5.4-pro",
-  repairModel: "gpt-5.4-pro",
+  enrichmentModel: "gpt-5.5",
+  repairModel: "gpt-5.5",
 };
 const MODEL_TRANSLATION_OPTIONS = {
   temperature: 0.3,
@@ -573,6 +617,19 @@ const PLAIN_TEXT_TRANSLATION_CHUNK_MAX_CHARS = 1800;
 const ENRICHMENT_FULL_CONTEXT_MAX_CHARS = 7000;
 const ENRICHMENT_EXCERPT_MAX_CHARS = 1100;
 const ENRICHMENT_MAX_HEADINGS = 12;
+const ENRICHMENT_QUALITY_VERSION = "phase4e-grounded-support-v1";
+const SUPPORT_FIELD_NAMES = [
+  "learningObjectives",
+  "keyConcepts",
+  "commonMisconceptions",
+  "teacherNotes",
+  "classroomActivities",
+  "differentiatedSupport",
+  "extensionQuestions",
+  "studentWorksheet",
+];
+const DOCUMENT_FATAL_FALLBACK_RATIO = 0.2;
+const DOCUMENT_MIN_TRANSLATED_RATIO = 0.25;
 
 const TARGET_LANGUAGE_CONFIG = {
   English: {
@@ -727,7 +784,10 @@ function getTranslationPreserveFlag(block, preserveFormulas, targetLanguage = ""
   if (shouldPreserveBeforeTranslation(block, preserveFormulas, targetLanguage)) {
     return preserveFormulas ? "formula_preserved" : "formula_translatable";
   }
-  return shouldTranslateBlock(block) ? "translate" : "preserve_candidate";
+  const classification = classifyTranslationBlock(block?.text, targetLanguage, block);
+  return shouldTranslateBlock(block, targetLanguage)
+    ? `translate:${classification.blockKind}`
+    : `preserve:${classification.blockKind}`;
 }
 
 function buildTranslationCacheKey({ block, targetLanguage, preserveFormulas }) {
@@ -761,7 +821,7 @@ function isCacheableTranslationResult({ block, translatedText, action, validatio
   const finalText = String(translatedText || "").trim();
   if (String(action || "").toLowerCase() === "preserve") return false;
   if (!finalText) return false;
-  if (!shouldTranslateBlock(block)) return false;
+  if (!shouldTranslateBlock(block, targetLanguage)) return false;
   if (Array.isArray(validationReasons) && validationReasons.length > 0) return false;
   if (
     targetLanguage !== "English" &&
@@ -786,8 +846,12 @@ function createTranslationDebugEntry({
   preserved,
   preserveJustification = null,
   severity = "",
+  blockKind = "",
+  expectedAction = "",
+  validationSeverity = "",
 }) {
   const sourceText = String(block?.text || "");
+  const classification = classifyTranslationBlock(sourceText, targetLanguage, block);
   const sameText =
     normalizeForComparison(sourceText) &&
     normalizeForComparison(sourceText) === normalizeForComparison(translatedText);
@@ -816,6 +880,13 @@ function createTranslationDebugEntry({
     preserved: isPreserved,
     preserveJustification,
     severity,
+    blockKind: blockKind || classification.blockKind,
+    expectedAction: expectedAction || classification.expectedAction,
+    classificationConfidence: classification.confidence,
+    validationSeverity:
+      validationSeverity ||
+      severity ||
+      (validationReasons.length > 0 ? classification.validationSeverity : "accepted"),
   };
 }
 
@@ -831,8 +902,15 @@ function buildDebugEntryIndex(entries) {
 
 function addTranslationDebugCount(summary, entry) {
   summary.total += 1;
+  const blockKind = entry.blockKind || "unknown";
+  summary.blockKindCounts[blockKind] = (summary.blockKindCounts[blockKind] || 0) + 1;
   if (entry.action === "preserve") {
     summary.preserved += 1;
+    if (entry.validationSeverity === "warning" || entry.severity === "warning") {
+      summary.preserveWarningCount += 1;
+    } else {
+      summary.preserveAcceptedCount += 1;
+    }
   } else {
     summary.translated += 1;
     if (normalizeForComparison(entry.sourceText) === normalizeForComparison(entry.translatedText)) {
@@ -841,6 +919,11 @@ function addTranslationDebugCount(summary, entry) {
   }
   if (Array.isArray(entry.validationReasons) && entry.validationReasons.length > 0) {
     summary.suspicious += 1;
+    if (entry.validationSeverity === "warning" || entry.severity === "warning") {
+      summary.warningSuspiciousCount += 1;
+    } else {
+      summary.fatalSuspiciousCount += 1;
+    }
   }
 }
 
@@ -858,13 +941,18 @@ function buildTranslationWorkPlan({ blocks, targetLanguage, preserveFormulas, ca
   blocks.forEach((block, index) => {
     const sourceText = String(block?.text || "");
     const normalizedText = normalizeForComparison(sourceText);
+    const classification = classifyTranslationBlock(sourceText, targetLanguage, block);
     const forcePreserve = shouldPreserveBeforeTranslation(block, preserveFormulas, targetLanguage);
     const preserveJustification =
+      classification.preserveJustification ||
       getContactOrIdentifierJustification(sourceText) ||
-      (forcePreserve ? "formula_or_code" : isMostlyNonTranslatableText(sourceText) ? "non_language" : "");
-    const localPreserve = !normalizedText || forcePreserve || !shouldTranslateBlock(block);
+      (forcePreserve ? "formula_or_equation" : isMostlyNonTranslatableText(sourceText) ? "non_language" : "");
+    const localPreserve = !normalizedText || forcePreserve || !shouldTranslateBlock(block, targetLanguage);
 
     if (localPreserve) {
+      const preserveValidationSeverity = !normalizedText
+        ? "accepted"
+        : classification.validationSeverity || "accepted";
       const preserveReason = !normalizedText
         ? "empty_block"
         : forcePreserve
@@ -888,7 +976,10 @@ function buildTranslationWorkPlan({ blocks, targetLanguage, preserveFormulas, ca
               charCount: sourceText.length,
             }
           : preserveJustification || null,
-        severity: !normalizedText ? "" : "warning",
+        severity: preserveValidationSeverity === "warning" ? "warning" : "",
+        blockKind: classification.blockKind,
+        expectedAction: classification.expectedAction,
+        validationSeverity: preserveValidationSeverity,
       });
       translationsById[block.id] = sourceText;
       debugEntries.push(entry);
@@ -979,6 +1070,7 @@ function mergeTranslationWorkResult({
     const reason = String(primaryEntry.reason || "online_api");
 
     group.members.forEach((member) => {
+      const classification = classifyTranslationBlock(member.block?.text, targetLanguage, member.block);
       const validationReasons = validateTranslatedBlock({
         block: member.block,
         translatedText,
@@ -1002,7 +1094,11 @@ function mergeTranslationWorkResult({
           index: member.index,
           reasons: validationReasons,
           severity,
-          preserveJustification: getContactOrIdentifierJustification(member.block?.text) || "",
+          validationSeverity: severity || "accepted",
+          blockKind: classification.blockKind,
+          expectedAction: classification.expectedAction,
+          classificationConfidence: classification.confidence,
+          preserveJustification: classification.preserveJustification || "",
         });
       }
 
@@ -1017,9 +1113,12 @@ function mergeTranslationWorkResult({
         translatedText,
         validationReasons,
         severity,
+        validationSeverity: severity || "accepted",
+        blockKind: classification.blockKind,
+        expectedAction: classification.expectedAction,
         preserveJustification:
           severity === "warning"
-            ? getContactOrIdentifierJustification(member.block?.text) || null
+            ? classification.preserveJustification || null
             : null,
       });
       translationsById[member.block.id] = translatedText || member.block.text;
@@ -1182,16 +1281,154 @@ function createLocalFallbackLesson({
       },
     ],
     simplifiedExplanation: modeText,
+    learningObjectives: [
+      "Identify the main idea of the lesson content.",
+      "Explain key terms using bilingual support.",
+      "Check understanding through short practice tasks.",
+    ],
+    keyConcepts: [
+      {
+        title: "Bilingual access",
+        explanation: "Students use translated content and key terms to understand the lesson.",
+      },
+    ],
+    commonMisconceptions: [
+      {
+        misconception: "Translation alone guarantees understanding.",
+        correction: "Students also need vocabulary, examples, and practice checks.",
+      },
+    ],
+    teacherNotes: [
+      "Use the glossary before reading the translated text.",
+      "Ask students to explain one key term in their own words.",
+    ],
+    classroomActivities: [
+      {
+        title: "Think-pair-share",
+        duration: "8 minutes",
+        instructions: "Students compare the source idea and translated explanation with a partner.",
+      },
+    ],
+    differentiatedSupport: {
+      strugglingLearners: "Pre-teach glossary terms and reduce the reading chunk size.",
+      advancedLearners: "Ask students to extend the explanation with an example.",
+      languageSupport: "Keep important English terms visible next to translated terms.",
+    },
+    extensionQuestions: [
+      "How could this idea be applied in a new situation?",
+      "Which term is most important for understanding the lesson?",
+    ],
+    studentWorksheet: [
+      {
+        taskTitle: "Key idea check",
+        instructions: "Write one sentence explaining the main idea and one key term.",
+      },
+    ],
     quizSettings,
     quiz: expanded,
     mode,
     meta: {
       usedFallback: true,
       reason: getRuntimeUiText().localFallbackLessonGenerated,
+      supportSource: "local-fallback",
+      teachingSupportFallbackUsed: true,
+      teachingSupportFallbackReason: getRuntimeUiText().localFallbackLessonGenerated,
       pipelineVersion: PIPELINE_VERSION,
       translationPromptVersion: TRANSLATION_PROMPT_VERSION,
       enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
       cacheVersion: CACHE_VERSION,
+    },
+  };
+}
+
+function getSafeEnrichmentFallbackExplanation(targetLanguage) {
+  if (targetLanguage === "Kazakh") {
+    return "Аударма дайын. AI оқу қолдауын жасау сәтсіз болғандықтан, бұл пакет негізгі аударылған мәтінмен берілді.";
+  }
+  if (targetLanguage === "Russian") {
+    return "Перевод готов. Учебная поддержка ИИ не была сгенерирована, поэтому пакет содержит базовый переведенный текст.";
+  }
+  if (targetLanguage === "Chinese") {
+    return "翻译已完成。AI 教学支持未能生成，因此此包仅包含基础翻译内容。";
+  }
+  return "Translation is complete. AI teaching support could not be generated, so this package includes the translated lesson text with basic empty support sections.";
+}
+
+function createSafeEnrichmentFallbackLesson(
+  fallbackInput,
+  translation,
+  {
+    reason = "",
+    retryAttempted = false,
+    firstAttemptEmpty = false,
+    firstAttemptInvalid = false,
+    richRetryAttempted = false,
+    minimalFallbackAttempted = false,
+  } = {}
+) {
+  const quizSettings = normalizeQuizSettings(fallbackInput.quizSettings);
+  const titleGrounding = getLessonTitleGroundingInfo({
+    lessonTitle: fallbackInput.lessonTitle,
+    sourceText: fallbackInput.sourceText,
+    translation,
+  });
+  const lessonLike = {
+    lessonTitle: fallbackInput.lessonTitle,
+    sourceText: fallbackInput.sourceText,
+    targetLanguage: fallbackInput.targetLanguage,
+    translation: String(translation || "").trim(),
+    glossary: [],
+    simplifiedExplanation: getSafeEnrichmentFallbackExplanation(fallbackInput.targetLanguage),
+    learningObjectives: [],
+    keyConcepts: [],
+    commonMisconceptions: [],
+    teacherNotes: "",
+    classroomActivities: [],
+    differentiatedSupport: {
+      strugglingLearners: "",
+      advancedLearners: "",
+      languageSupport: "",
+    },
+    extensionQuestions: [],
+    studentWorksheet: [],
+    quizSettings,
+    quiz: [],
+    mode: fallbackInput.mode,
+  };
+  const supportSummary = getGeneratedSupportFieldSummary(lessonLike);
+  return {
+    ...lessonLike,
+    meta: {
+      usedFallback: false,
+      reason: "",
+      enrichmentAttempted: true,
+      enrichmentRetryAttempted: Boolean(retryAttempted),
+      enrichmentFirstAttemptEmpty: Boolean(firstAttemptEmpty),
+      enrichmentFirstAttemptInvalid: Boolean(firstAttemptInvalid),
+      enrichmentRichRetryAttempted: Boolean(richRetryAttempted),
+      enrichmentCompactCompleteRetryAttempted: Boolean(richRetryAttempted),
+      enrichmentMinimalFallbackAttempted: Boolean(minimalFallbackAttempted),
+      enrichmentUsedFallback: true,
+      enrichmentFailureReason: reason || getRuntimeUiText().lessonSupportFailed,
+      teachingSupportFallbackUsed: true,
+      teachingSupportFallbackReason: reason || getRuntimeUiText().lessonSupportFailed,
+      supportSource: "local-fallback",
+      kazakhPromptMode: fallbackInput.targetLanguage === "Kazakh" ? "compact-complete" : "",
+      lessonTitleWasUserProvided: Boolean(fallbackInput.lessonTitleWasUserProvided),
+      lessonTitleDerivedFromFile: Boolean(fallbackInput.lessonTitleDerivedFromFile),
+      lessonTitleUsedForGeneration: titleGrounding.lessonTitleUsedForGeneration,
+      lessonTitleMismatchSuspected: titleGrounding.lessonTitleMismatchSuspected,
+      droppedOffTopicQuizItems: [],
+      provider: MODEL_API_CONFIG.provider,
+      model: MODEL_API_CONFIG.enrichmentModel,
+      pipelineVersion: PIPELINE_VERSION,
+      translationPromptVersion: TRANSLATION_PROMPT_VERSION,
+      enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
+      enrichmentQualityVersion: ENRICHMENT_QUALITY_VERSION,
+      cacheVersion: CACHE_VERSION,
+      generatedSupportFields: supportSummary.generatedSupportFields,
+      missingOptionalSupportFields: supportSummary.missingOptionalSupportFields,
+      supportFieldCounts: getSupportFieldCounts(lessonLike),
     },
   };
 }
@@ -1328,23 +1565,140 @@ function extractHeadingCandidates(sourceText, maxItems = ENRICHMENT_MAX_HEADINGS
     .slice(0, maxItems);
 }
 
-function buildTeachingSupportContext({ lessonTitle, sourceText, translation, targetLanguage }) {
+const GLOSSARY_CANDIDATE_STOPWORDS = new Set([
+  "about",
+  "after",
+  "before",
+  "between",
+  "chapter",
+  "example",
+  "important",
+  "introduction",
+  "lesson",
+  "learning",
+  "module",
+  "section",
+  "student",
+  "students",
+  "teacher",
+  "understand",
+  "untitled",
+  "using",
+]);
+const LESSON_TITLE_STOPWORDS = new Set([
+  ...GLOSSARY_CANDIDATE_STOPWORDS,
+  "intro",
+  "overview",
+  "part",
+  "unit",
+  "course",
+  "class",
+  "topic",
+]);
+const OFF_TOPIC_TERM_EXPANSIONS = {
+  photosynthesis: [
+    "photosynthesis",
+    "plant",
+    "plants",
+    "leaf",
+    "leaves",
+    "chlorophyll",
+    "sunlight",
+    "фотосинтез",
+    "өсімдік",
+    "өсімдіктер",
+    "жапырақ",
+    "хлорофилл",
+    "күн сәулесі",
+  ],
+  plant: ["plant", "plants", "өсімдік", "өсімдіктер"],
+};
+
+function extractGlossaryCandidateTerms(sourceText, maxItems = 16) {
+  const source = String(sourceText || "");
+  const counts = new Map();
+  const candidates = source.match(
+    /\b(?:[A-Z][A-Za-z0-9+-]{1,}|[a-z][a-z]+(?:\s+[a-z][a-z]+){1,3}|[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/g
+  );
+  (candidates || []).forEach((candidate) => {
+    const term = candidate.replace(/\s+/g, " ").trim();
+    const key = term.toLowerCase();
+    if (term.length < 3 || term.length > 60) return;
+    if (/^\d+$/.test(term)) return;
+    if (GLOSSARY_CANDIDATE_STOPWORDS.has(key)) return;
+    counts.set(term, (counts.get(term) || 0) + 1);
+  });
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)
+    .map(([term]) => term)
+    .slice(0, maxItems);
+}
+
+function extractSignificantTitleTerms(text) {
+  return Array.from(
+    new Set(
+      String(text || "")
+        .toLowerCase()
+        .match(/\b[a-z][a-z]{2,}\b/g) || []
+    )
+  ).filter((term) => !LESSON_TITLE_STOPWORDS.has(term));
+}
+
+function getLessonTitleGroundingInfo({ lessonTitle, sourceText, translation }) {
+  const titleTerms = extractSignificantTitleTerms(lessonTitle);
+  const contextText = `${sourceText || ""}\n${translation || ""}`.toLowerCase();
+  const unsupportedTitleTerms = titleTerms.filter((term) => !contextText.includes(term));
+  const mismatchSuspected =
+    titleTerms.length > 0 && unsupportedTitleTerms.length / titleTerms.length >= 0.5;
+  return {
+    lessonTitleUsedForGeneration: !mismatchSuspected,
+    lessonTitleMismatchSuspected: mismatchSuspected,
+    unsupportedTitleTerms,
+  };
+}
+
+function buildTeachingSupportContext({
+  lessonTitle,
+  sourceText,
+  translation,
+  targetLanguage,
+  sourceType = "text",
+  sourceFileName = "",
+  targetAudience = "beginner/intermediate students",
+  blockKindSummary = null,
+}) {
   const source = String(sourceText || "").trim();
   const translated = String(translation || "").trim();
+  const titleGrounding = getLessonTitleGroundingInfo({
+    lessonTitle,
+    sourceText: source,
+    translation: translated,
+  });
   const totalChars = source.length + translated.length;
   const compact = totalChars > ENRICHMENT_FULL_CONTEXT_MAX_CHARS;
   const headings = extractHeadingCandidates(source);
+  const glossaryCandidateTerms = extractGlossaryCandidateTerms(source);
+  const summary = {
+    lessonTitle,
+    targetLanguage,
+    sourceType,
+    sourceFileName,
+    targetAudience,
+    sourceCharCount: source.length,
+    translationCharCount: translated.length,
+    headings,
+    glossaryCandidateTerms,
+    blockKindSummary: blockKindSummary || {},
+    lessonTitleUsedForGeneration: titleGrounding.lessonTitleUsedForGeneration,
+    lessonTitleMismatchSuspected: titleGrounding.lessonTitleMismatchSuspected,
+    unsupportedTitleTerms: titleGrounding.unsupportedTitleTerms,
+  };
 
   if (!compact) {
     return {
       compact,
-      summary: {
-        lessonTitle,
-        targetLanguage,
-        sourceCharCount: source.length,
-        translationCharCount: translated.length,
-        headings,
-      },
+      summary,
       sourceContext: source,
       translationContext: translated,
     };
@@ -1352,13 +1706,7 @@ function buildTeachingSupportContext({ lessonTitle, sourceText, translation, tar
 
   return {
     compact,
-    summary: {
-      lessonTitle,
-      targetLanguage,
-      sourceCharCount: source.length,
-      translationCharCount: translated.length,
-      headings,
-    },
+    summary,
     sourceContext: selectRepresentativeExcerpts(source),
     translationContext: selectRepresentativeExcerpts(translated),
   };
@@ -1369,7 +1717,7 @@ function getEnrichmentLanguageInstruction(targetLanguage) {
     return (
       "Use natural Kazakh in Cyrillic script for explanations, quiz questions, and answers. " +
       "Do not write Russian. Do not use Kazakh Latin script. " +
-      'Glossary terms may preserve the English source term alongside the Kazakh term, for example: "photosynthesis / фотосинтез".'
+      'Glossary terms may preserve the English source term alongside the Kazakh term, using the pattern "source term / Kazakh term" when useful.'
     );
   }
   if (targetLanguage === "Russian") {
@@ -1394,18 +1742,64 @@ function buildLessonEnrichmentMessages({
   targetLanguage,
   mode,
   quizSettings,
+  sourceType,
+  sourceFileName,
+  targetAudience,
+  blockKindSummary,
 }) {
   const context = buildTeachingSupportContext({
     lessonTitle,
     sourceText,
     translation,
     targetLanguage,
+    sourceType,
+    sourceFileName,
+    targetAudience,
+    blockKindSummary,
   });
   const languageInstruction = getEnrichmentLanguageInstruction(targetLanguage);
   const modeHint =
     mode === "teacher"
       ? "Teacher mode: include classroom facilitation language and slightly more depth."
       : "Student mode: use short, clear, learner-friendly wording.";
+  const titleWarning =
+    "The lesson title is metadata only. If the lesson title conflicts with the source or translated lesson content, ignore the title and use the lesson excerpts as the source of truth. " +
+    (context.summary.lessonTitleMismatchSuspected
+      ? "The current lesson title may be inaccurate; keep it as display metadata only and do not generate content from it. "
+      : "Use the lesson title only when it is supported by the lesson excerpts. ");
+
+  if (targetLanguage === "Kazakh") {
+    return [
+      {
+        role: "system",
+        content:
+          "Generate a compact but complete Kazakh teaching-support package. Return ONLY strict JSON. No markdown, comments, or text outside JSON. Do not include a translation field. " +
+          "Use natural Kazakh in Cyrillic script. Do not write Russian. Do not use Latin-script Kazakh for ordinary prose. Preserve English technical terms in parentheses when useful. " +
+          titleWarning +
+          "Use only the provided source/translation context. Do not invent unrelated topics. Do not use unsupported lesson-title topics in quiz options or examples. " +
+          "Return all fields in this exact schema: " +
+          '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"learningObjectives":["string"],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"differentiatedSupport":{"strugglingLearners":"string","advancedLearners":"string","languageSupport":"string"},"extensionQuestions":["string"],"studentWorksheet":[{"taskTitle":"string","instructions":"string"}],"meta":{}}. ' +
+          "Limits: glossary 5, simplifiedExplanation 2-4 short paragraphs, learningObjectives 3, keyConcepts 3, commonMisconceptions 2, teacherNotes 3 short notes, classroomActivities 1, extensionQuestions 2, studentWorksheet 1-2 tasks, quiz respects quiz settings.",
+      },
+      {
+        role: "user",
+        content:
+          `Display lesson title: ${lessonTitle}\n` +
+          `Title grounding: ${JSON.stringify({
+            lessonTitleUsedForGeneration: context.summary.lessonTitleUsedForGeneration,
+            lessonTitleMismatchSuspected: context.summary.lessonTitleMismatchSuspected,
+            unsupportedTitleTerms: context.summary.unsupportedTitleTerms,
+          })}\n` +
+          `Target language: Kazakh\n` +
+          `Language rules: ${languageInstruction}\n` +
+          `Learning mode: ${mode}\n` +
+          `${modeHint}\n` +
+          `Quiz settings:\n${JSON.stringify(quizSettings, null, 2)}\n\n` +
+          `Lesson context:\n${JSON.stringify(context, null, 2)}\n\n` +
+          "Generate complete compact Kazakh JSON. Actual lesson excerpts are the source of truth.",
+      },
+    ];
+  }
 
   return [
     {
@@ -1415,12 +1809,20 @@ function buildLessonEnrichmentMessages({
         "Return ONLY strict JSON. Do not include markdown, comments, or explanatory text outside JSON. " +
         "No trailing commas. All strings must be properly quoted. Arrays must use commas between elements. " +
         "Use this exact top-level schema: " +
-        '{"glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"meta":{}}. ' +
+        '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"learningObjectives":["string"],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"differentiatedSupport":{"strugglingLearners":"string","advancedLearners":"string","languageSupport":"string"},"extensionQuestions":["string"],"studentWorksheet":[{"taskTitle":"string","instructions":"string"}],"meta":{}}. ' +
         "This is the teaching-support generation stage, not the translation stage. Do not include a translation field and do not retranslate or rewrite the completed translation. " +
-        "Rules: glossary should have 3-6 key terms. Make glossary terms bilingual when useful, such as source term / translated term. Explanations must be in the target language. " +
-        "Quiz must follow requested question count, difficulty, and question types, and must be based on the provided lesson content rather than generic bilingual education. " +
-        "For multiple_choice, provide exactly 4 options, exactly one clearly correct answer, plausible incorrect distractors, and a valid answerIndex. Avoid ambiguous questions. " +
-        "For true_false, provide exactly 2 options in the target language when practical and a valid answerIndex. For short_answer, provide a concise answerText and avoid broad prompts like explain the topic. " +
+        titleWarning +
+        "Grounding rules: use only the provided lesson context. Do not invent unrelated topics. Do not give generic education advice. Refer to specific concepts, headings, examples, formulas, terminology, or glossary candidates from the context when possible. If the source content is thin, produce fewer and shorter items rather than hallucinating. " +
+        "Glossary rules: choose 5-8 genuinely important terms from the lesson. Avoid trivial words and random terms. Use source term + translated term when useful, and explain each term in concise student-friendly target-language wording. " +
+        "Simplified explanation rules: write a concise 200-400 word explanation when enough content exists. Include a short overview, why the topic matters, step-by-step explanation, one concrete example or analogy when possible, a common difficulty point, and a brief recap. Use line breaks if helpful. " +
+        "Learning objectives must be actionable and measurable, using verbs such as explain, identify, compare, apply, calculate, interpret, or evaluate. Generate 3-5 objectives. " +
+        "Key concepts should have 3-5 lesson-specific concepts with explanations that connect to the lesson context and do not merely repeat the glossary. " +
+        "Common misconceptions should have 2-4 specific misunderstandings and corrections. Teacher notes must cover introduction, likely struggle points, examples to emphasize, prior knowledge, and quick checks for understanding. " +
+        "Classroom activities should have 1-3 executable activities such as a warm-up, pair discussion, quick practice, or exit ticket with clear instructions and realistic durations. Differentiated support must be practical for struggling learners, advanced learners, and language support. " +
+        "Extension questions should have 2-4 open-ended lesson-connected questions. Student worksheet should have 2-4 short actionable tasks, mixing vocabulary check, concept application, short explanation, or reflection. " +
+        "Quiz must follow requested question count, difficulty, and question types, and must be concise and grounded in lesson content. Cover recall, understanding, and application when possible. " +
+        "For multiple_choice, provide exactly 4 options, exactly one clearly correct answer, plausible distractors, and a valid answerIndex. Avoid ambiguous questions. " +
+        "For true_false, provide exactly 2 options in the target language when practical and avoid statements that are too obvious. For short_answer, provide a concise answerText and avoid broad prompts like explain the topic. " +
         "For long lessons, cover different parts of the context rather than only the beginning.",
     },
     {
@@ -1433,7 +1835,135 @@ function buildLessonEnrichmentMessages({
         `${modeHint}\n` +
         `Quiz settings:\n${JSON.stringify(quizSettings, null, 2)}\n\n` +
         `Teaching-support context (${context.compact ? "compact representative excerpts" : "full context"}):\n${JSON.stringify(context, null, 2)}\n\n` +
-        "Generate only glossary, simplifiedExplanation, quiz, and optional meta as valid strict JSON. Do not include translation in the response. Do not use markdown, comments, trailing commas, or unquoted strings.",
+        "Generate only the requested teaching-support JSON fields and optional meta as valid strict JSON. Do not include translation in the response. Do not use markdown, comments, trailing commas, or unquoted strings.",
+    },
+  ];
+}
+
+function buildMinimalLessonEnrichmentMessages({
+  lessonTitle,
+  sourceText,
+  translation,
+  targetLanguage,
+  mode,
+  quizSettings,
+  sourceType,
+  sourceFileName,
+  targetAudience,
+  blockKindSummary,
+}) {
+  const context = buildTeachingSupportContext({
+    lessonTitle,
+    sourceText,
+    translation,
+    targetLanguage,
+    sourceType,
+    sourceFileName,
+    targetAudience,
+    blockKindSummary,
+  });
+  const languageInstruction = getEnrichmentLanguageInstruction(targetLanguage);
+  return [
+    {
+      role: "system",
+      content:
+        "You generate compact teaching support for a bilingual education app. " +
+        "Return ONLY valid strict JSON. No markdown, comments, trailing commas, or text outside JSON. " +
+        "Use only the provided lesson context and avoid generic filler or unrelated topics. " +
+        "Do not include a translation field. Use only these top-level fields: " +
+        '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"learningObjectives":["string"],"keyConcepts":[{"title":"string","explanation":"string"}],"meta":{}}. ' +
+        "Keep output small and lesson-specific: glossary 3-5 important terms, learningObjectives 3 measurable items, keyConcepts 3 items, simplifiedExplanation short but useful, and quiz concise.",
+    },
+    {
+      role: "user",
+      content:
+        `Lesson title: ${lessonTitle}\n` +
+        `Target language: ${targetLanguage}\n` +
+        `Language rules: ${languageInstruction}\n` +
+        `Learning mode: ${mode}\n` +
+        `Quiz settings:\n${JSON.stringify(quizSettings, null, 2)}\n\n` +
+        `Compact context:\n${JSON.stringify(context, null, 2)}\n\n` +
+        "Generate the compact teaching-support JSON only. Do not include translation.",
+    },
+  ];
+}
+
+function buildCompactRichLessonEnrichmentMessages({
+  lessonTitle,
+  sourceText,
+  translation,
+  targetLanguage,
+  mode,
+  quizSettings,
+  sourceType,
+  sourceFileName,
+  targetAudience,
+  blockKindSummary,
+}) {
+  const context = buildTeachingSupportContext({
+    lessonTitle,
+    sourceText,
+    translation,
+    targetLanguage,
+    sourceType,
+    sourceFileName,
+    targetAudience,
+    blockKindSummary,
+  });
+  const languageInstruction = getEnrichmentLanguageInstruction(targetLanguage);
+  const titleWarning =
+    "The lesson title is metadata only. If it conflicts with source/translation context, ignore it for content generation. " +
+    (context.summary.lessonTitleMismatchSuspected
+      ? "The current title appears unsupported; do not use unsupported title topics for quiz or examples. "
+      : "Use the title only when supported by context. ");
+  if (targetLanguage === "Kazakh") {
+    return [
+      {
+        role: "system",
+        content:
+          "Return ONLY strict JSON for a complete Kazakh teaching-support package. No markdown. No translation field. " +
+          "Use natural Kazakh Cyrillic. Do not write Russian. Do not use Latin-script Kazakh. Preserve English technical terms in parentheses when useful. " +
+          titleWarning +
+          "Return every schema field: lessonTitle, glossary, simplifiedExplanation, quiz, learningObjectives, keyConcepts, commonMisconceptions, teacherNotes, classroomActivities, differentiatedSupport, extensionQuestions, studentWorksheet, meta. " +
+          "Keep it short: glossary 5, explanation 2-4 short paragraphs, objectives 3, concepts 3, misconceptions 2, teacherNotes 3 short notes, activities 1, extensionQuestions 2, worksheet 1-2 tasks. Quiz follows settings and must be about the actual lesson context.",
+      },
+      {
+        role: "user",
+        content:
+          `Display lesson title: ${lessonTitle}\n` +
+          `Title grounding: ${JSON.stringify({
+            lessonTitleUsedForGeneration: context.summary.lessonTitleUsedForGeneration,
+            lessonTitleMismatchSuspected: context.summary.lessonTitleMismatchSuspected,
+            unsupportedTitleTerms: context.summary.unsupportedTitleTerms,
+          })}\n` +
+          `Quiz settings:\n${JSON.stringify(quizSettings, null, 2)}\n\n` +
+          `Context:\n${JSON.stringify(context, null, 2)}\n\n` +
+          "Generate complete compact Kazakh JSON only.",
+      },
+    ];
+  }
+  return [
+    {
+      role: "system",
+      content:
+        "You generate complete but compact teaching support for a bilingual education app. " +
+        "Return ONLY valid strict JSON. No markdown, comments, trailing commas, or text outside JSON. " +
+        "Use only the provided lesson context. Do not invent unrelated topics or generic filler. Do not include a translation field. " +
+        titleWarning +
+        "Return all top-level fields in this schema, even when a field must be empty: " +
+        '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"learningObjectives":["string"],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"differentiatedSupport":{"strugglingLearners":"string","advancedLearners":"string","languageSupport":"string"},"extensionQuestions":["string"],"studentWorksheet":[{"taskTitle":"string","instructions":"string"}],"meta":{}}. ' +
+        "Limits: glossary 5 entries, learningObjectives 3, keyConcepts 3, commonMisconceptions 2, classroomActivities 1, extensionQuestions 2, studentWorksheet 1-2 tasks. Quiz must respect quiz settings.",
+    },
+    {
+      role: "user",
+      content:
+        `Lesson title: ${lessonTitle}\n` +
+        `Target language: ${targetLanguage}\n` +
+        `Language rules: ${languageInstruction}\n` +
+        `Learning mode: ${mode}\n` +
+        `Quiz settings:\n${JSON.stringify(quizSettings, null, 2)}\n\n` +
+        `Compact complete context:\n${JSON.stringify(context, null, 2)}\n\n` +
+        "Generate complete compact teaching-support JSON with all schema fields. Do not include translation.",
     },
   ];
 }
@@ -1446,7 +1976,7 @@ function buildEnrichmentJsonRepairMessages(malformedJson) {
         "You repair malformed JSON for an education app. Return ONLY valid strict JSON. " +
         "Do not use markdown, comments, or explanatory text. Do not add a translation field. " +
         "No trailing commas. All strings must be properly quoted. Arrays must use commas between elements. " +
-        "Preserve the semantic content if possible. The allowed top-level fields are glossary, simplifiedExplanation, quiz, and meta.",
+        "Preserve the semantic content if possible. The allowed top-level fields are lessonTitle, glossary, simplifiedExplanation, quiz, learningObjectives, keyConcepts, commonMisconceptions, teacherNotes, classroomActivities, differentiatedSupport, extensionQuestions, studentWorksheet, and meta.",
     },
     {
       role: "user",
@@ -1459,7 +1989,25 @@ function buildEnrichmentJsonRepairMessages(malformedJson) {
 
 function isEmptyModelOutputError(err) {
   const message = String(err?.message || "");
-  return message === getRuntimeUiText().aiEmptyResponse;
+  return err?.code === "enrichment_empty_response" || message === getRuntimeUiText().aiEmptyResponse;
+}
+
+function createEnrichmentEmptyResponseError() {
+  const error = new Error(getRuntimeUiText().aiEmptyResponse);
+  error.code = "enrichment_empty_response";
+  return error;
+}
+
+function parseEnrichmentJsonPayload(content) {
+  if (!stripModelThinking(content)) {
+    throw createEnrichmentEmptyResponseError();
+  }
+  return extractJsonPayload(content);
+}
+
+function formatEnrichmentFailureReason(err) {
+  if (isEmptyModelOutputError(err)) return getRuntimeUiText().aiEmptyResponse;
+  return String(err?.message || getRuntimeUiText().lessonSupportFailed).trim();
 }
 
 function warnEnrichmentParseFailure(label, err) {
@@ -1468,80 +2016,288 @@ function warnEnrichmentParseFailure(label, err) {
   }
 }
 
+async function requestParsedEnrichment(messages, runContext) {
+  const content = await callModelChat(messages, {
+    stage: "enrichment",
+    options: MODEL_ENRICHMENT_OPTIONS,
+    format: "json",
+    signal: runContext?.signal,
+  });
+  throwIfGenerationCancelled(runContext);
+  try {
+    return {
+      content,
+      parsed: parseEnrichmentJsonPayload(content),
+    };
+  } catch (parseErr) {
+    parseErr.enrichmentContent = content;
+    throw parseErr;
+  }
+}
+
+function hasSupportValue(value) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === "object") return Object.values(value).some((item) => hasSupportValue(item));
+  return Boolean(String(value || "").trim());
+}
+
+function getIncompleteRichSupportFields(parsed) {
+  const requiredFields = [
+    "commonMisconceptions",
+    "teacherNotes",
+    "classroomActivities",
+    "differentiatedSupport",
+    "extensionQuestions",
+    "studentWorksheet",
+  ];
+  return requiredFields.filter((field) => !hasSupportValue(parsed?.[field]));
+}
+
+function getMissingCoreEnrichmentFields(parsed) {
+  return ["glossary", "simplifiedExplanation", "quiz"].filter(
+    (field) => !hasSupportValue(parsed?.[field])
+  );
+}
+
+function mergeEnrichmentPayloads(primary, supplemental) {
+  const result = {
+    ...(primary && typeof primary === "object" ? primary : {}),
+  };
+  if (!supplemental || typeof supplemental !== "object" || Array.isArray(supplemental)) {
+    return result;
+  }
+  [
+    "lessonTitle",
+    "glossary",
+    "simplifiedExplanation",
+    "quiz",
+    "learningObjectives",
+    "keyConcepts",
+    "commonMisconceptions",
+    "teacherNotes",
+    "classroomActivities",
+    "extensionQuestions",
+    "studentWorksheet",
+  ].forEach((field) => {
+    if (!hasSupportValue(result[field]) && hasSupportValue(supplemental[field])) {
+      result[field] = supplemental[field];
+    }
+  });
+  const primarySupport = result.differentiatedSupport || {};
+  const supplementalSupport = supplemental.differentiatedSupport || {};
+  result.differentiatedSupport = {
+    strugglingLearners:
+      primarySupport.strugglingLearners || supplementalSupport.strugglingLearners || "",
+    advancedLearners:
+      primarySupport.advancedLearners || supplementalSupport.advancedLearners || "",
+    languageSupport: primarySupport.languageSupport || supplementalSupport.languageSupport || "",
+  };
+  result.meta = {
+    ...(supplemental.meta || {}),
+    ...(result.meta || {}),
+  };
+  return result;
+}
+
 async function generateTeachingSupportWithModel(fallbackInput, translation, runContext = null) {
   throwIfGenerationCancelled(runContext);
+  const titleGrounding = getLessonTitleGroundingInfo({
+    lessonTitle: fallbackInput.lessonTitle,
+    sourceText: fallbackInput.sourceText,
+    translation,
+  });
   const messages = buildLessonEnrichmentMessages({
     ...fallbackInput,
     translation,
   });
   let parsed;
   let malformedContent = "";
+  let enrichmentRetryAttempted = false;
+  let enrichmentFirstAttemptEmpty = false;
+  let enrichmentFirstAttemptInvalid = false;
+  let enrichmentRichRetryAttempted = false;
+  let enrichmentMinimalFallbackAttempted = false;
+  let minimalFallbackUsed = false;
+  let failureReason = "";
   try {
-    const content = await callModelChat(messages, {
-      stage: "enrichment",
-      options: MODEL_ENRICHMENT_OPTIONS,
-      format: "json",
-      signal: runContext?.signal,
-    });
-    throwIfGenerationCancelled(runContext);
-    malformedContent = content;
-    parsed = extractJsonPayload(content);
+    const result = await requestParsedEnrichment(messages, runContext);
+    malformedContent = result.content;
+    parsed = result.parsed;
   } catch (err) {
     if (isGenerationCancelledError(err)) throw err;
-    warnEnrichmentParseFailure("initial output could not be parsed; retrying once.", err);
+    malformedContent = err?.enrichmentContent || malformedContent;
+    failureReason = formatEnrichmentFailureReason(err);
+    enrichmentFirstAttemptEmpty = isEmptyModelOutputError(err);
+    enrichmentFirstAttemptInvalid = !enrichmentFirstAttemptEmpty;
+    warnEnrichmentParseFailure("initial output could not be parsed; trying repair or complete rich retry.", err);
+    enrichmentRetryAttempted = true;
+    if (malformedContent) {
+      try {
+        const repairedContent = await callModelChat(
+          buildEnrichmentJsonRepairMessages(malformedContent),
+          {
+            stage: "json_repair",
+            options: MODEL_ENRICHMENT_OPTIONS,
+            format: "json",
+            signal: runContext?.signal,
+          }
+        );
+        throwIfGenerationCancelled(runContext);
+        parsed = parseEnrichmentJsonPayload(repairedContent);
+      } catch (repairErr) {
+        if (isGenerationCancelledError(repairErr)) throw repairErr;
+        failureReason = formatEnrichmentFailureReason(repairErr);
+        warnEnrichmentParseFailure("initial JSON repair failed; trying complete rich retry.", repairErr);
+      }
+    }
+  }
+
+  const missingAfterFirstParse = getIncompleteRichSupportFields(parsed);
+  if (!parsed || missingAfterFirstParse.length > 0) {
+    enrichmentRetryAttempted = true;
+    enrichmentRichRetryAttempted = true;
     try {
-      const retryContent = await callModelChat(messages, {
-        stage: "enrichment",
-        options: MODEL_ENRICHMENT_OPTIONS,
-        format: "json",
-        signal: runContext?.signal,
-      });
-      throwIfGenerationCancelled(runContext);
-      malformedContent = retryContent;
-      parsed = extractJsonPayload(retryContent);
+      const retryResult = await requestParsedEnrichment(
+        buildCompactRichLessonEnrichmentMessages({
+          ...fallbackInput,
+          translation,
+        }),
+        runContext
+      );
+      malformedContent = retryResult.content;
+      parsed = mergeEnrichmentPayloads(parsed, retryResult.parsed);
     } catch (retryErr) {
       if (isGenerationCancelledError(retryErr)) throw retryErr;
-      warnEnrichmentParseFailure("retry output could not be parsed; trying JSON repair.", retryErr);
+      malformedContent = retryErr?.enrichmentContent || malformedContent;
+      failureReason = formatEnrichmentFailureReason(retryErr);
+      warnEnrichmentParseFailure("complete rich retry output could not be parsed; trying JSON repair.", retryErr);
       if (typeof console !== "undefined") {
         console.warn("[AI enrichment] JSON repair retry is being used.");
       }
-      if (!malformedContent && isEmptyModelOutputError(err)) {
-        malformedContent = "";
-      }
-      if (!malformedContent) {
-        throw retryErr;
-      }
-      const repairedContent = await callModelChat(
-        buildEnrichmentJsonRepairMessages(malformedContent),
-        {
-          stage: "json_repair",
-          options: MODEL_ENRICHMENT_OPTIONS,
-          format: "json",
-          signal: runContext?.signal,
+      if (malformedContent) {
+        try {
+          const repairedContent = await callModelChat(
+            buildEnrichmentJsonRepairMessages(malformedContent),
+            {
+              stage: "json_repair",
+              options: MODEL_ENRICHMENT_OPTIONS,
+              format: "json",
+              signal: runContext?.signal,
+            }
+          );
+          throwIfGenerationCancelled(runContext);
+          parsed = mergeEnrichmentPayloads(parsed, parseEnrichmentJsonPayload(repairedContent));
+        } catch (repairErr) {
+          if (isGenerationCancelledError(repairErr)) throw repairErr;
+          failureReason = formatEnrichmentFailureReason(repairErr);
+          warnEnrichmentParseFailure("rich JSON repair failed; trying minimal fallback.", repairErr);
         }
-      );
-      throwIfGenerationCancelled(runContext);
-      parsed = extractJsonPayload(repairedContent);
+      }
     }
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(getRuntimeUiText().aiNoJson);
+    enrichmentMinimalFallbackAttempted = true;
+    try {
+      const minimalResult = await requestParsedEnrichment(
+        buildMinimalLessonEnrichmentMessages({
+          ...fallbackInput,
+          translation,
+        }),
+        runContext
+      );
+      parsed = minimalResult.parsed;
+      minimalFallbackUsed = true;
+      failureReason = failureReason || "complete_rich_enrichment_failed";
+    } catch (minimalErr) {
+      if (isGenerationCancelledError(minimalErr)) throw minimalErr;
+      failureReason = formatEnrichmentFailureReason(minimalErr);
+      return createSafeEnrichmentFallbackLesson(fallbackInput, translation, {
+        reason: failureReason || getRuntimeUiText().aiNoJson,
+        retryAttempted: enrichmentRetryAttempted,
+        firstAttemptEmpty: enrichmentFirstAttemptEmpty,
+        firstAttemptInvalid: enrichmentFirstAttemptInvalid,
+        richRetryAttempted: enrichmentRichRetryAttempted,
+        minimalFallbackAttempted: enrichmentMinimalFallbackAttempted,
+      });
+    }
   }
+
+  if (getMissingCoreEnrichmentFields(parsed).length > 0 && !minimalFallbackUsed) {
+    enrichmentRetryAttempted = true;
+    enrichmentMinimalFallbackAttempted = true;
+    try {
+      const minimalResult = await requestParsedEnrichment(
+        buildMinimalLessonEnrichmentMessages({
+          ...fallbackInput,
+          translation,
+        }),
+        runContext
+      );
+      parsed = mergeEnrichmentPayloads(parsed, minimalResult.parsed);
+      minimalFallbackUsed = true;
+      failureReason = failureReason || "complete_enrichment_missing_core_fields";
+    } catch (minimalErr) {
+      if (isGenerationCancelledError(minimalErr)) throw minimalErr;
+      failureReason = formatEnrichmentFailureReason(minimalErr);
+      warnEnrichmentParseFailure("minimal enrichment fallback failed; using safe local teaching-support fallback.", minimalErr);
+      return createSafeEnrichmentFallbackLesson(fallbackInput, translation, {
+        reason: failureReason || getRuntimeUiText().aiNoJson,
+        retryAttempted: enrichmentRetryAttempted,
+        firstAttemptEmpty: enrichmentFirstAttemptEmpty,
+        firstAttemptInvalid: enrichmentFirstAttemptInvalid,
+        richRetryAttempted: enrichmentRichRetryAttempted,
+        minimalFallbackAttempted: enrichmentMinimalFallbackAttempted,
+      });
+    }
+  }
+
+  const supportSummary = getGeneratedSupportFieldSummary(parsed);
+  const teachingSupportFallbackUsed = Boolean(
+    minimalFallbackUsed || getMissingCoreEnrichmentFields(parsed).length > 0
+  );
 
   return {
     ...parsed,
-    lessonTitle: parsed.lessonTitle || fallbackInput.lessonTitle,
+    lessonTitle: titleGrounding.lessonTitleUsedForGeneration
+      ? parsed.lessonTitle || fallbackInput.lessonTitle
+      : fallbackInput.lessonTitle,
     translation,
     quizSettings: parsed.quizSettings || fallbackInput.quizSettings,
     meta: {
       ...(parsed.meta || {}),
       usedFallback: false,
       reason: "",
+      enrichmentAttempted: true,
+      enrichmentFirstAttemptEmpty,
+      enrichmentFirstAttemptInvalid,
+      enrichmentRichRetryAttempted,
+      enrichmentCompactCompleteRetryAttempted: enrichmentRichRetryAttempted,
+      enrichmentMinimalFallbackAttempted,
+      enrichmentRetryAttempted,
+      enrichmentUsedFallback: minimalFallbackUsed,
+      enrichmentFailureReason: minimalFallbackUsed
+        ? failureReason || "minimal_enrichment_fallback_used"
+        : "",
+      teachingSupportFallbackUsed,
+      teachingSupportFallbackReason: teachingSupportFallbackUsed
+        ? failureReason || "teaching_support_partially_generated"
+        : "",
+      supportSource: teachingSupportFallbackUsed ? "mixed-online-defaults" : "online-api",
+      kazakhPromptMode: fallbackInput.targetLanguage === "Kazakh" ? "compact-complete" : "",
+      lessonTitleWasUserProvided: Boolean(fallbackInput.lessonTitleWasUserProvided),
+      lessonTitleDerivedFromFile: Boolean(fallbackInput.lessonTitleDerivedFromFile),
+      lessonTitleUsedForGeneration: titleGrounding.lessonTitleUsedForGeneration,
+      lessonTitleMismatchSuspected: titleGrounding.lessonTitleMismatchSuspected,
+      droppedOffTopicQuizItems: [],
       provider: MODEL_API_CONFIG.provider,
       model: MODEL_API_CONFIG.enrichmentModel,
       pipelineVersion: PIPELINE_VERSION,
       enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
+      enrichmentQualityVersion: ENRICHMENT_QUALITY_VERSION,
+      generatedSupportFields: supportSummary.generatedSupportFields,
+      missingOptionalSupportFields: supportSummary.missingOptionalSupportFields,
+      supportFieldCounts: getSupportFieldCounts(parsed),
     },
   };
 }
@@ -1614,6 +2370,9 @@ function buildBlockTranslationMessages({
   const languageInstruction = strictRetry
     ? languageConfig.retryPrompt
     : languageConfig.prompt;
+  const strictRetryInstruction = strictRetry
+    ? buildStrictRetryInstruction(blocks, targetLanguage)
+    : "";
   return [
     {
       role: "system",
@@ -1624,10 +2383,14 @@ function buildBlockTranslationMessages({
         "This is translation only. Do not summarize, omit content, add glossary terms, add explanations, or create quiz content. " +
         `${languageInstruction} ` +
         "Translate normal natural-language content, including headings, paragraphs, list items, and table cell prose. " +
-        "Preserve only URLs, emails, file paths, obvious identifiers, course codes, formulas, symbolic expressions, and non-language tokens. " +
+        "For blockKind mixed_label_identifier, translate only human-readable labels and preserve emails, phone numbers, URLs, IDs, and names exactly. " +
+        "For blockKind table_header_or_short_label or translatable_heading, translate ordinary English words while preserving acronyms such as AI, GPT, GPA, and IELTS when appropriate. " +
+        "For blockKind formula_with_explanation, translate explanatory prose and preserve formulas, variables, mathematical notation, units, and symbols. " +
+        "For blockKind list_item or worksheet_or_question, translate the content while preserving numbering, option labels, formulas, variables, and symbols. " +
+        "Preserve only pure URLs, emails, file paths, obvious identifiers, course codes, pure formulas/equations, symbolic expressions, and non-language tokens. " +
         "Do not preserve text only because it is bold, large, in a heading, in a list, in a table, or specially formatted. " +
         (strictRetry
-          ? "This is a strict retry for one incomplete block: return the exact same id and translate ordinary English prose completely. "
+          ? `This is a strict retry for one incomplete block: return the exact same id. ${strictRetryInstruction} `
           : "") +
         "Return one translation item for every input block, in the same order.",
     },
@@ -1640,11 +2403,19 @@ function buildBlockTranslationMessages({
         `Preserve formulas: ${Boolean(preserveFormulas)}\n\n` +
         `Blocks:\n${JSON.stringify(
           blocks.map((block) => ({
-            id: block.id,
-            text: block.text,
-            isFormula: Boolean(block.isFormula),
-            blockType: block.blockType || "",
-            sourceLocation: block.sourceLocation || block.id || "",
+            ...(() => {
+              const classification = classifyTranslationBlock(block.text, targetLanguage, block);
+              return {
+                id: block.id,
+                text: block.text,
+                isFormula: Boolean(block.isFormula),
+                blockKind: classification.blockKind,
+                expectedAction: classification.expectedAction,
+                typedInstruction: buildBlockTranslationPrompt(block, targetLanguage, classification),
+                blockType: block.blockType || "",
+                sourceLocation: block.sourceLocation || block.id || "",
+              };
+            })(),
           })),
           null,
           2
@@ -1659,6 +2430,444 @@ function normalizeForComparison(text) {
 
 function countMatches(text, pattern) {
   return (String(text || "").match(pattern) || []).length;
+}
+
+const PRESERVABLE_ACRONYM_WORDS = new Set([
+  "ACT",
+  "AI",
+  "API",
+  "C++",
+  "C#",
+  "CET-4",
+  "CET-6",
+  "CFA",
+  "CPA",
+  "CSS",
+  "GMAT",
+  "GPA",
+  "GPT",
+  "GRE",
+  "HADOOP",
+  "HTML",
+  "IELTS",
+  "IOT",
+  "JAVA",
+  "JAVASCRIPT",
+  "JS",
+  "MAPREDUCE",
+  "MATLAB",
+  "ML",
+  "NLP",
+  "PYTHON",
+  "R",
+  "SAT",
+  "SQL",
+  "TYPESCRIPT",
+  "TOEFL",
+]);
+
+const TRANSLATABLE_LABEL_WORDS = new Set([
+  "academic",
+  "application",
+  "background",
+  "certificate",
+  "certification",
+  "code",
+  "course",
+  "credit",
+  "data",
+  "date",
+  "description",
+  "education",
+  "email",
+  "experience",
+  "honor",
+  "honors",
+  "major",
+  "mark",
+  "mathematical",
+  "modelling",
+  "module",
+  "name",
+  "period",
+  "phone",
+  "practice",
+  "lecture",
+  "project",
+  "qualification",
+  "score",
+  "skill",
+  "skills",
+  "summary",
+  "title",
+  "tool",
+  "tools",
+]);
+
+const PRESERVABLE_ENTITY_WORDS = new Set([
+  "GITHUB",
+  "LINKEDIN",
+  "OPENAI",
+  "MICROSOFT",
+  "GOOGLE",
+]);
+
+function getLatinWordTokens(text) {
+  return normalizeForComparison(text).match(/[A-Za-z][A-Za-z0-9+#.+-]*/g) || [];
+}
+
+function normalizeAcronymToken(token) {
+  return String(token || "").replace(/[._]/g, "").toUpperCase();
+}
+
+function isKnownAcronymOrExamName(text) {
+  const words = getLatinWordTokens(text);
+  if (!words.length || words.length > 3) return false;
+  if (words.length > 1) {
+    return words.every((word) => PRESERVABLE_ACRONYM_WORDS.has(normalizeAcronymToken(word)));
+  }
+  return words.every((word) => {
+    const normalized = normalizeAcronymToken(word);
+    return (
+      PRESERVABLE_ACRONYM_WORDS.has(normalized) ||
+      (/^[A-Z0-9.+-]{2,12}$/.test(word) && !/[a-z]/.test(word))
+    );
+  });
+}
+
+function isKnownEntityName(text) {
+  const words = getLatinWordTokens(text);
+  if (!words.length || words.length > 3) return false;
+  return words.every((word) => PRESERVABLE_ENTITY_WORDS.has(normalizeAcronymToken(word)));
+}
+
+function hasTranslatableLabelWords(text) {
+  return getLatinWordTokens(text).some((word) =>
+    TRANSLATABLE_LABEL_WORDS.has(word.toLowerCase())
+  );
+}
+
+function hasNaturalLanguageWords(text) {
+  return getLatinWordTokens(text).filter((word) => /[aeiou]/i.test(word) && word.length >= 3).length >= 2;
+}
+
+function hasAllCapsMultiWordPhrase(text) {
+  const words = getLatinWordTokens(text);
+  if (words.length < 2) return false;
+  const upperWords = words.filter((word) => /^[A-Z][A-Z0-9+#.+-]*$/.test(word));
+  return upperWords.length === words.length;
+}
+
+function isPureContactOrUrl(text) {
+  const value = normalizeForComparison(text);
+  if (!value) return false;
+  if (/^(https?:\/\/|www\.)\S+$/i.test(value)) return true;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return true;
+  if (/^\+?\d[\d\s().-]{6,}\d$/.test(value)) return true;
+  return false;
+}
+
+function hasContactOrUrlValue(text) {
+  const value = normalizeForComparison(text);
+  return /https?:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+|\+?\d[\d\s().-]{6,}\d/i.test(value);
+}
+
+function looksLikeMixedLabelIdentifier(text) {
+  const value = normalizeForComparison(text);
+  if (!value) return false;
+  if (hasContactOrUrlValue(value)) return true;
+  if (/^[A-Za-z][A-Za-z\s/.-]{1,30}:\s*[\dA-Z][\w\s/.,:+-]*$/i.test(value)) return true;
+  return false;
+}
+
+function looksLikeEntityOnly(text) {
+  const value = normalizeForComparison(text);
+  if (!value || hasTranslatableLabelWords(value) || hasContactOrUrlValue(value)) return false;
+  if (/[.!?。！？:;|/@]/.test(value)) return false;
+  const words = getLatinWordTokens(value);
+  if (words.length < 2 || words.length > 5) return false;
+  if (/\b(University|College|Institute|School|Laboratory|Lab|Ltd|LLC|Inc|Corporation|Corp)\b/.test(value)) {
+    return true;
+  }
+  return words.every((word) => /^[A-Z][A-Za-z.'-]*$/.test(word) || /^[A-Z]{2,}$/.test(word));
+}
+
+function looksLikeTableHeaderOrShortLabel(text, context = {}) {
+  const value = normalizeForComparison(text);
+  if (!value || hasContactOrUrlValue(value) || isKnownAcronymOrExamName(value)) return false;
+  const words = getLatinWordTokens(value);
+  if (words.length < 1 || words.length > 5) return false;
+  if (context?.blockType === "table_cell" && words.length <= 4) return true;
+  const strongShortLabels = new Set([
+    "code",
+    "credit",
+    "date",
+    "email",
+    "major",
+    "mark",
+    "module",
+    "name",
+    "period",
+    "phone",
+    "score",
+    "title",
+  ]);
+  return (
+    hasTranslatableLabelWords(value) &&
+    (words.length <= 2 || words.some((word) => strongShortLabels.has(word.toLowerCase())))
+  );
+}
+
+function looksLikeTranslatableHeading(text, context = {}) {
+  const value = normalizeForComparison(text);
+  if (!value || hasContactOrUrlValue(value) || isKnownAcronymOrExamName(value)) return false;
+  const words = getLatinWordTokens(value);
+  if (words.length < 2 || words.length > 10) return false;
+  if (hasAllCapsMultiWordPhrase(value) && (hasTranslatableLabelWords(value) || words.length >= 3)) {
+    return true;
+  }
+  if (context?.blockType === "heading") return true;
+  if (hasTranslatableLabelWords(value)) return true;
+  return words.length >= 4 && words.some((word) => /[a-z]/.test(word));
+}
+
+function hasFormulaSignal(text) {
+  const value = normalizeForComparison(text);
+  return /[=≈≠≤≥∑∫∞π√^²³]|[A-Za-z]\([^)]+\)|\b\d+(?:\.\d+)?\s*[+\-*/]\s*\d+|\b[a-z]\s*[=<>]\s*/i.test(value);
+}
+
+function looksLikeFormulaOrEquationOnly(text) {
+  const value = normalizeForComparison(text);
+  if (!value || !hasFormulaSignal(value)) return false;
+  const words = getLatinWordTokens(value).filter((word) => !/^[a-zA-Z]$/.test(word));
+  const naturalWords = words.filter((word) => /[aeiou]/i.test(word) && word.length >= 3);
+  return naturalWords.length <= 1 && !/[.!?。！？]/.test(value);
+}
+
+function looksLikeFormulaWithExplanation(text) {
+  const value = normalizeForComparison(text);
+  return hasFormulaSignal(value) && (hasNaturalLanguageWords(value) || isOrdinaryProse(value));
+}
+
+function looksLikeCodeOrIdentifierOnly(text) {
+  const value = normalizeForComparison(text);
+  if (!value) return false;
+  if (/^(npm|yarn|pnpm|pip|python|node|uvicorn)\s+[\w@./:-]+(?:\s+[\w@./:-]+)*$/i.test(value)) return true;
+  if (/^(function|const|let|var|class|def)\s+[A-Za-z_$][\w$]*(?:\([^)]*\))?/.test(value)) return true;
+  if (/^[A-Z_][A-Z0-9_]{2,}$/.test(value)) return true;
+  if (/^[\w.-]+\.(py|js|ts|jsx|tsx|json|html|css|docx|pdf|txt|md)$/i.test(value)) return true;
+  if (/^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*|\([^)]*\))+$/.test(value)) return true;
+  return false;
+}
+
+function looksLikeListItem(text, context = {}) {
+  const value = normalizeForComparison(text);
+  if (context?.blockType === "list_item") return true;
+  return /^(\(?[A-Za-z0-9]{1,3}\)?[.)]|[-•*✓✔])\s*\S+/.test(value);
+}
+
+function looksLikeWorksheetQuestion(text) {
+  const value = normalizeForComparison(text);
+  return /^(Question|Q)\s*\d+[:.)]/i.test(value) ||
+    /^(Choose|Explain|Find|Calculate|Solve|True\s+or\s+False|Fill\s+in|Select)\b/i.test(value);
+}
+
+function makeBlockClassification({
+  kind,
+  confidence,
+  expectedAction,
+  validationSeverity,
+  preserveJustification = null,
+}) {
+  return {
+    kind,
+    blockKind: kind,
+    confidence,
+    expectedAction,
+    validationSeverity,
+    preserveJustification,
+  };
+}
+
+function classifyTranslationBlock(text, targetLanguage = "", context = {}) {
+  const value = normalizeForComparison(text);
+  if (!value) {
+    return makeBlockClassification({
+      kind: "code_or_identifier",
+      confidence: 1,
+      expectedAction: "preserve",
+      validationSeverity: "accepted",
+      preserveJustification: "empty",
+    });
+  }
+
+  if (isPureContactOrUrl(value)) {
+    return makeBlockClassification({
+      kind: "contact_or_url_only",
+      confidence: 1,
+      expectedAction: "preserve",
+      validationSeverity: "accepted",
+      preserveJustification: value.includes("@") ? "email" : /https?:\/\/|www\./i.test(value) ? "url" : "phone",
+    });
+  }
+
+  if (looksLikeMixedLabelIdentifier(value)) {
+    return makeBlockClassification({
+      kind: "mixed_label_identifier",
+      confidence: 0.9,
+      expectedAction: "translate_labels",
+      validationSeverity: "warning",
+      preserveJustification: "contact_or_identifier",
+    });
+  }
+
+  if (looksLikeWorksheetQuestion(value)) {
+    return makeBlockClassification({
+      kind: "worksheet_or_question",
+      confidence: 0.9,
+      expectedAction: "translate_with_preserved_fragments",
+      validationSeverity: "fatal",
+    });
+  }
+
+  if (looksLikeListItem(value, context)) {
+    return makeBlockClassification({
+      kind: "list_item",
+      confidence: context?.blockType === "list_item" ? 0.95 : 0.85,
+      expectedAction: "translate_with_preserved_fragments",
+      validationSeverity: "fatal",
+    });
+  }
+
+  if (looksLikeFormulaWithExplanation(value)) {
+    return makeBlockClassification({
+      kind: "formula_with_explanation",
+      confidence: 0.9,
+      expectedAction: "translate_with_preserved_fragments",
+      validationSeverity: "fatal",
+    });
+  }
+
+  if (looksLikeFormulaOrEquationOnly(value)) {
+    return makeBlockClassification({
+      kind: "formula_or_equation",
+      confidence: 0.95,
+      expectedAction: "preserve",
+      validationSeverity: "accepted",
+      preserveJustification: "formula_or_equation",
+    });
+  }
+
+  if (looksLikeCodeOrIdentifierOnly(value)) {
+    return makeBlockClassification({
+      kind: "code_or_identifier",
+      confidence: 0.95,
+      expectedAction: "preserve",
+      validationSeverity: "accepted",
+      preserveJustification: "code_or_identifier",
+    });
+  }
+
+  if (isKnownAcronymOrExamName(value)) {
+    return makeBlockClassification({
+      kind: "acronym_or_exam_name",
+      confidence: 0.95,
+      expectedAction: "preserve",
+      validationSeverity: "accepted",
+      preserveJustification: "acronym",
+    });
+  }
+
+  if (looksLikeTableHeaderOrShortLabel(value, context)) {
+    return makeBlockClassification({
+      kind: "table_header_or_short_label",
+      confidence: context?.blockType === "table_cell" ? 0.85 : 0.75,
+      expectedAction: "translate",
+      validationSeverity: context?.blockType === "table_cell" ? "warning" : "fatal",
+    });
+  }
+
+  if (looksLikeTranslatableHeading(value, context)) {
+    return makeBlockClassification({
+      kind: "translatable_heading",
+      confidence: context?.blockType === "heading" ? 0.9 : 0.82,
+      expectedAction: "translate",
+      validationSeverity: "fatal",
+    });
+  }
+
+  if (isKnownEntityName(value)) {
+    return makeBlockClassification({
+      kind: "entity_only",
+      confidence: 0.92,
+      expectedAction: "preserve",
+      validationSeverity: "accepted",
+      preserveJustification: "entity_name",
+    });
+  }
+
+  if (looksLikeEntityOnly(value)) {
+    return makeBlockClassification({
+      kind: "entity_only",
+      confidence: 0.82,
+      expectedAction: "preserve",
+      validationSeverity: "accepted",
+      preserveJustification: "name",
+    });
+  }
+
+  if (isOrdinaryProse(value)) {
+    return makeBlockClassification({
+      kind: "ordinary_prose",
+      confidence: 0.95,
+      expectedAction: "translate",
+      validationSeverity: "fatal",
+    });
+  }
+
+  if (isLikelyFormulaOrCodeBlock(value) || isMostlyNonTranslatableText(value)) {
+    return makeBlockClassification({
+      kind: "code_or_identifier",
+      confidence: 0.75,
+      expectedAction: "preserve",
+      validationSeverity: "accepted",
+      preserveJustification: "code_or_identifier",
+    });
+  }
+
+  const fallbackKind = getLatinWordTokens(value).length <= 5
+    ? "table_header_or_short_label"
+    : "ordinary_prose";
+  return makeBlockClassification({
+    kind: fallbackKind,
+    confidence: 0.6,
+    expectedAction: "translate",
+    validationSeverity: fallbackKind === "ordinary_prose" ? "fatal" : "warning",
+  });
+}
+
+function buildStrictRetryInstruction(blocks, targetLanguage) {
+  const block = Array.isArray(blocks) ? blocks[0] : null;
+  const classification = classifyTranslationBlock(block?.text || "", targetLanguage, block || {});
+  return buildBlockTranslationPrompt(block || {}, targetLanguage, classification);
+}
+
+function buildBlockTranslationPrompt(block, targetLanguage, blockClassification = null) {
+  const classification =
+    blockClassification || classifyTranslationBlock(block?.text || "", targetLanguage, block || {});
+  if (classification.blockKind === "mixed_label_identifier") {
+    return `Translate only the human-readable labels into ${targetLanguage}; preserve emails, phone numbers, URLs, IDs, names, numbers, and code-like identifiers exactly.`;
+  }
+  if (["translatable_heading", "table_header_or_short_label"].includes(classification.blockKind)) {
+    return `Translate this heading or label into ${targetLanguage}. Preserve acronyms, names, URLs, emails, numbers, and code-like identifiers, but translate ordinary English words.`;
+  }
+  if (classification.blockKind === "formula_with_explanation") {
+    return `Translate the explanatory prose into ${targetLanguage}; preserve formulas, variables, mathematical notation, units, and symbols exactly.`;
+  }
+  if (["worksheet_or_question", "list_item"].includes(classification.blockKind)) {
+    return `Translate the list item or question into ${targetLanguage}; preserve bullets, numbering, option labels, formulas, variables, and symbols.`;
+  }
+  return `Translate this block completely into ${targetLanguage}. Do not leave ordinary English prose untranslated. Preserve only names, formulas, URLs, numbers, and code-like identifiers.`;
 }
 
 function isMostlyNonTranslatableText(text) {
@@ -1683,7 +2892,9 @@ function isMostlyNonTranslatableText(text) {
 }
 
 function isLikelyNonTranslatableBlock(text) {
-  return isMostlyNonTranslatableText(text) || isMostlyEntityOrContactInfo(text);
+  return ["entity_only", "contact_or_url_only", "acronym_or_exam_name", "formula_or_equation", "code_or_identifier"].includes(
+    classifyTranslationBlock(text).blockKind
+  );
 }
 
 function isOrdinaryProse(text) {
@@ -1747,7 +2958,14 @@ function isMostlyEntityOrContactInfo(text) {
 
 function shouldAllowPreservedForTarget(text, targetLanguage) {
   if (targetLanguage === "English") return true;
-  return isMostlyEntityOrContactInfo(text);
+  return [
+    "entity_only",
+    "contact_or_url_only",
+    "mixed_label_identifier",
+    "acronym_or_exam_name",
+    "formula_or_equation",
+    "code_or_identifier",
+  ].includes(classifyTranslationBlock(text, targetLanguage).blockKind);
 }
 
 function isLikelyFormulaOrCodeBlock(text) {
@@ -1833,7 +3051,7 @@ function hasEnoughCyrillic(text) {
 function hasTargetScriptSignals(text, targetLanguage) {
   const value = String(text || "");
   if (targetLanguage === "Chinese") {
-    return countMatches(value, /[\u3400-\u9FFF]/g) >= 2;
+    return countMatches(value, /[\u3400-\u9FFF]/g) >= 1;
   }
   if (targetLanguage === "Kazakh" || targetLanguage === "Russian") {
     return hasEnoughCyrillic(value);
@@ -1847,35 +3065,67 @@ function hasTargetScriptSignals(text, targetLanguage) {
   return true;
 }
 
-function isSuspiciousTranslation(sourceText, translatedText, targetLanguage) {
+function isSuspiciousTranslation(sourceText, translatedText, targetLanguage, context = {}) {
   if (targetLanguage === "English") return [];
-  if (isLikelyNonTranslatableBlock(sourceText)) return [];
+  const classification = classifyTranslationBlock(sourceText, targetLanguage, context);
+  if (
+    ["entity_only", "contact_or_url_only", "acronym_or_exam_name", "formula_or_equation", "code_or_identifier"].includes(
+      classification.blockKind
+    )
+  ) {
+    return [];
+  }
   const reasons = [];
   const source = normalizeForComparison(sourceText);
   const translated = normalizeForComparison(translatedText);
   const sourceIsEnglishProse = looksLikeOrdinaryEnglishProse(source);
+  const isMixedLabel = classification.blockKind === "mixed_label_identifier";
+  const isHeadingOrLabel = ["table_header_or_short_label", "translatable_heading"].includes(
+    classification.blockKind
+  );
+  const isFragmentTranslation = ["formula_with_explanation", "worksheet_or_question", "list_item"].includes(
+    classification.blockKind
+  );
+  const needsTargetScript = sourceIsEnglishProse || isHeadingOrLabel || isMixedLabel || isFragmentTranslation;
+
   if (!translated) reasons.push("empty_translated_text");
-  if (sourceIsEnglishProse && source && source === translated) {
-    reasons.push("ordinary_english_left_untranslated");
+  if (source && source === translated) {
+    if (isMixedLabel) {
+      reasons.push("mixed_label_identifier_unchanged");
+    } else if (isHeadingOrLabel) {
+      reasons.push(`${classification.blockKind}_left_untranslated`);
+    } else if (isFragmentTranslation) {
+      reasons.push(`${classification.blockKind}_left_untranslated`);
+    } else if (sourceIsEnglishProse) {
+      reasons.push("ordinary_english_left_untranslated");
+    }
   }
-  if (sourceIsEnglishProse && looksMostlyEnglish(translated)) {
+  if ((sourceIsEnglishProse || isHeadingOrLabel || isFragmentTranslation) && looksMostlyEnglish(translated)) {
     reasons.push("translated_text_still_mostly_english");
   }
-  if (sourceIsEnglishProse && getTextSimilarity(source, translated) >= 0.72) {
+  if ((sourceIsEnglishProse || isHeadingOrLabel || isFragmentTranslation) && getTextSimilarity(source, translated) >= 0.72) {
     reasons.push("translated_text_too_similar_to_source");
   }
-  if (sourceIsEnglishProse && !hasTargetScriptSignals(translated, targetLanguage)) {
+  if (needsTargetScript && !hasTargetScriptSignals(translated, targetLanguage)) {
     reasons.push(`missing_${String(targetLanguage || "target").toLowerCase()}_script_signal`);
   }
-  if (["Kazakh", "Russian"].includes(targetLanguage) && !hasEnoughCyrillic(translated)) {
+  if (
+    ["Kazakh", "Russian"].includes(targetLanguage) &&
+    (sourceIsEnglishProse || isHeadingOrLabel || isFragmentTranslation) &&
+    !hasEnoughCyrillic(translated)
+  ) {
     reasons.push("insufficient_cyrillic_for_target");
   }
   return reasons;
 }
 
-function shouldTranslateBlock(block) {
-  if (shouldPreserveBeforeTranslation(block, true)) return false;
-  return !isLikelyNonTranslatableBlock(block?.text);
+function shouldTranslateBlock(block, targetLanguage = "") {
+  if (shouldPreserveBeforeTranslation(block, true, targetLanguage)) return false;
+  const classification = classifyTranslationBlock(block?.text, targetLanguage, block);
+  if (targetLanguage && targetLanguage !== "English") {
+    return classification.expectedAction !== "preserve";
+  }
+  return classification.expectedAction !== "preserve";
 }
 
 function getCyrillicRatio(text) {
@@ -1890,7 +3140,7 @@ function validateTranslatedBlock({ block, translatedText, action, targetLanguage
   const reasons = [];
   const sourceText = String(block?.text || "");
   const finalText = String(translatedText || "").trim();
-  const needsTranslation = shouldTranslateBlock(block);
+  const needsTranslation = shouldTranslateBlock(block, targetLanguage);
   const normalizedSource = normalizeForComparison(sourceText);
   const normalizedTranslation = normalizeForComparison(finalText);
   const languageConfig = getTargetLanguageConfig(targetLanguage);
@@ -1920,7 +3170,7 @@ function validateTranslatedBlock({ block, translatedText, action, targetLanguage
     reasons.push("low_cyrillic_ratio");
   }
 
-  isSuspiciousTranslation(sourceText, finalText, targetLanguage).forEach((reason) => {
+  isSuspiciousTranslation(sourceText, finalText, targetLanguage, block).forEach((reason) => {
     if (!reasons.includes(reason)) reasons.push(reason);
   });
 
@@ -1930,8 +3180,51 @@ function validateTranslatedBlock({ block, translatedText, action, targetLanguage
 function getValidationSeverity({ block, translatedText, targetLanguage, validationReasons }) {
   if (!Array.isArray(validationReasons) || validationReasons.length === 0) return "";
   const sourceText = String(block?.text || "");
+  const classification = classifyTranslationBlock(sourceText, targetLanguage, block);
+  if (classification.blockKind === "mixed_label_identifier") return "warning";
   if (shouldAllowPreservedForTarget(sourceText, targetLanguage)) return "warning";
-  return "fatal";
+  if (
+    ["ordinary_prose", "formula_with_explanation", "worksheet_or_question", "list_item"].includes(
+      classification.blockKind
+    )
+  ) {
+    return "fatal";
+  }
+  if (["translatable_heading", "table_header_or_short_label"].includes(classification.blockKind)) {
+    return classification.validationSeverity || (classification.confidence >= 0.8 ? "fatal" : "warning");
+  }
+  return classification.validationSeverity || "fatal";
+}
+
+function getTranslationFailureThresholdInfo(blocks, meta = {}) {
+  const sourceBlocks = Array.isArray(blocks) ? blocks : [];
+  const translatableCount = sourceBlocks.filter((block) => shouldTranslateBlock(block, meta.targetLanguage || "")).length;
+  const retrySummary = meta.retrySummary || {};
+  const debugSummary = meta.debugSummary || {};
+  const unresolved = Array.isArray(meta.suspiciousBlocks) ? meta.suspiciousBlocks : [];
+  const fatalFromUnresolved = unresolved.filter(
+    (item) => item?.validationSeverity === "fatal" || item?.severity === "fatal"
+  ).length;
+  const fatalFailures =
+    unresolved.length > 0 ? fatalFromUnresolved : Number(retrySummary.preservedAfterRetry || 0);
+  const translatedCount = Number(debugSummary.translated || 0);
+  const fatalRatio = translatableCount > 0 ? fatalFailures / translatableCount : 0;
+  const translatedRatio = translatableCount > 0 ? translatedCount / translatableCount : 1;
+  const triggered =
+    translatableCount > 0 &&
+    fatalFailures > 0 &&
+    (fatalRatio > DOCUMENT_FATAL_FALLBACK_RATIO || translatedRatio < DOCUMENT_MIN_TRANSLATED_RATIO);
+
+  return {
+    triggered,
+    fatalFailures,
+    translatableCount,
+    translatedCount,
+    fatalRatio,
+    translatedRatio,
+    fatalRatioThreshold: DOCUMENT_FATAL_FALLBACK_RATIO,
+    minTranslatedRatio: DOCUMENT_MIN_TRANSLATED_RATIO,
+  };
 }
 
 async function translateBlocksWithModel({
@@ -1987,6 +3280,7 @@ async function translateBlocksWithModel({
     const idMatched = Boolean(raw);
 
     const sourceText = String(block.text || "");
+    const classification = classifyTranslationBlock(sourceText, targetLanguage, block);
     const forcePreserve = shouldPreserveBeforeTranslation(block, preserveFormulas, targetLanguage);
     const action = !raw
       ? "preserve"
@@ -2010,7 +3304,7 @@ async function translateBlocksWithModel({
       targetLanguage,
     });
     if (!idMatched) {
-      if (shouldTranslateBlock(block)) {
+      if (shouldTranslateBlock(block, targetLanguage)) {
         validationReasons.push("missing_translation_item");
       }
     } else if (String(raw.id || "") !== blockId) {
@@ -2028,23 +3322,16 @@ async function translateBlocksWithModel({
         index,
         reasons: validationReasons,
         severity,
-        preserveJustification: getContactOrIdentifierJustification(sourceText) || "",
+        validationSeverity: severity || "accepted",
+        blockKind: classification.blockKind,
+        expectedAction: classification.expectedAction,
+        classificationConfidence: classification.confidence,
+        preserveJustification: classification.preserveJustification || "",
       });
-      debugSummary.suspicious += 1;
     }
 
     translationsById[block.id] = finalText;
-    debugSummary.total += 1;
-    if (action === "preserve" || forcePreserve) {
-      debugSummary.preserved += 1;
-    } else {
-      debugSummary.translated += 1;
-      if (finalText === sourceText) {
-        debugSummary.unchangedAfterTranslate += 1;
-      }
-    }
-
-    debugEntries.push({
+    const debugEntry = {
       index,
       id: block.id,
       blockType: block.blockType || "",
@@ -2064,9 +3351,16 @@ async function translateBlocksWithModel({
       textPreview: sourceText.slice(0, 140),
       frontendFlagIsFormula: Boolean(block.isFormula),
       severity,
+      validationSeverity: severity || "accepted",
+      blockKind: classification.blockKind,
+      expectedAction: classification.expectedAction,
       preserveJustification:
-        severity === "warning" ? getContactOrIdentifierJustification(sourceText) || null : null,
-    });
+        severity === "warning"
+          ? classification.preserveJustification || null
+          : null,
+    };
+    debugEntries.push(debugEntry);
+    addTranslationDebugCount(debugSummary, debugEntry);
   });
 
   return {
@@ -2092,13 +3386,104 @@ async function translateBlocksWithModel({
 
 function normalizeGlossaryItems(rawGlossary) {
   if (!Array.isArray(rawGlossary)) return [];
+  const seen = new Set();
   return rawGlossary
     .map((item) => ({
       term: String(item?.term || "").replace(/\s+/g, " ").trim(),
       explanation: String(item?.explanation || "").replace(/\s+/g, " ").trim(),
     }))
-    .filter((item) => item.term && item.explanation)
-    .slice(0, 6);
+    .filter((item) => {
+      if (!item.term || !item.explanation) return false;
+      const key = item.term.toLowerCase();
+      const plainTerm = key.replace(/[^\p{L}\p{N}\s+-]/gu, "").trim();
+      if (seen.has(key)) return false;
+      if (plainTerm.split(/\s+/).length === 1 && GLOSSARY_CANDIDATE_STOPWORDS.has(plainTerm)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 8);
+}
+
+function normalizeStringArray(value, maxItems = 8) {
+  if (typeof value === "string") {
+    return value
+      .split(/\n+/)
+      .map((item) => item.replace(/^[-*•\d.)\s]+/, "").replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .slice(0, maxItems);
+  }
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => String(item || "").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function normalizeObjectArray(value, schema, maxItems = 8) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const normalized = {};
+      schema.forEach((field) => {
+        normalized[field] = String(item[field] || "").replace(/\s+/g, " ").trim();
+      });
+      return normalized;
+    })
+    .filter((item) => item && Object.values(item).some(Boolean))
+    .slice(0, maxItems);
+}
+
+function normalizeTeacherNotes(value) {
+  if (Array.isArray(value)) return normalizeStringArray(value, 8);
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeDifferentiatedSupport(value) {
+  const raw = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return {
+    strugglingLearners: String(raw.strugglingLearners || "").replace(/\s+/g, " ").trim(),
+    advancedLearners: String(raw.advancedLearners || "").replace(/\s+/g, " ").trim(),
+    languageSupport: String(raw.languageSupport || "").replace(/\s+/g, " ").trim(),
+  };
+}
+
+function getGeneratedSupportFieldSummary(lessonLike) {
+  const result = {
+    generatedSupportFields: [],
+    missingOptionalSupportFields: [],
+  };
+  SUPPORT_FIELD_NAMES.forEach((field) => {
+    const value = lessonLike?.[field];
+    const hasValue = Array.isArray(value)
+      ? value.length > 0
+      : value && typeof value === "object"
+      ? Object.values(value).some(Boolean)
+      : Boolean(String(value || "").trim());
+    if (hasValue) result.generatedSupportFields.push(field);
+    else result.missingOptionalSupportFields.push(field);
+  });
+  return result;
+}
+
+function getSupportFieldCounts(lessonLike) {
+  const counts = {
+    glossary: Array.isArray(lessonLike?.glossary) ? lessonLike.glossary.length : 0,
+    quiz: Array.isArray(lessonLike?.quiz) ? lessonLike.quiz.length : 0,
+  };
+  SUPPORT_FIELD_NAMES.forEach((field) => {
+    const value = lessonLike?.[field];
+    if (Array.isArray(value)) {
+      counts[field] = value.length;
+    } else if (value && typeof value === "object") {
+      counts[field] = Object.values(value).filter((item) => Boolean(String(item || "").trim())).length;
+    } else {
+      counts[field] = String(value || "").trim() ? 1 : 0;
+    }
+  });
+  return counts;
 }
 
 function dedupeTextOptions(options) {
@@ -2180,6 +3565,53 @@ function normalizeQuizItems(rawQuiz, quizSettings, targetLanguage) {
   return normalized.slice(0, quizSettings.questionCount || defaultQuizSettings.questionCount);
 }
 
+function filterOffTopicQuizItems(quiz, { lessonTitle, sourceText, translation }) {
+  const titleGrounding = getLessonTitleGroundingInfo({ lessonTitle, sourceText, translation });
+  const bannedTerms = titleGrounding.lessonTitleMismatchSuspected
+    ? Array.from(
+        new Set(
+          titleGrounding.unsupportedTitleTerms.flatMap((term) => [
+            term,
+            ...(OFF_TOPIC_TERM_EXPANSIONS[term] || []),
+          ])
+        )
+      )
+    : [];
+  if (!Array.isArray(quiz) || bannedTerms.length === 0) {
+    return {
+      quiz: Array.isArray(quiz) ? quiz : [],
+      droppedOffTopicQuizItems: [],
+      ...titleGrounding,
+    };
+  }
+
+  const droppedOffTopicQuizItems = [];
+  const filteredQuiz = quiz.filter((item, index) => {
+    const itemText = [
+      item?.question,
+      item?.answerText,
+      item?.explanation,
+      ...(Array.isArray(item?.options) ? item.options : []),
+    ]
+      .join(" ")
+      .toLowerCase();
+    const matchedTerms = bannedTerms.filter((term) => itemText.includes(term));
+    if (matchedTerms.length === 0) return true;
+    droppedOffTopicQuizItems.push({
+      index,
+      matchedTerms,
+      question: clipText(item?.question || "", 180),
+    });
+    return false;
+  });
+
+  return {
+    quiz: filteredQuiz,
+    droppedOffTopicQuizItems,
+    ...titleGrounding,
+  };
+}
+
 function normalizeLessonResult(raw, fallbackInput) {
   if (!raw || typeof raw !== "object") {
     return createLocalFallbackLesson(fallbackInput);
@@ -2187,16 +3619,82 @@ function normalizeLessonResult(raw, fallbackInput) {
 
   const quizSettings = normalizeQuizSettings(raw.quizSettings || fallbackInput.quizSettings);
   const translation = String(raw.translation || "").trim();
-  const simplifiedExplanation = String(
+  let simplifiedExplanation = String(
     raw.simplifiedExplanation || raw.explanation || ""
   ).trim();
 
   const glossary = normalizeGlossaryItems(raw.glossary);
-  const quiz = normalizeQuizItems(raw.quiz, quizSettings, fallbackInput.targetLanguage);
+  const normalizedQuiz = normalizeQuizItems(raw.quiz, quizSettings, fallbackInput.targetLanguage);
+  const quizGrounding = filterOffTopicQuizItems(normalizedQuiz, {
+    lessonTitle: raw.lessonTitle || fallbackInput.lessonTitle,
+    sourceText: fallbackInput.sourceText,
+    translation,
+  });
+  const quiz = quizGrounding.quiz;
+  const quizMissingBecauseOffTopic =
+    normalizedQuiz.length > 0 &&
+    quiz.length === 0 &&
+    quizGrounding.droppedOffTopicQuizItems.length > 0;
+  const learningObjectives = normalizeStringArray(raw.learningObjectives, 5);
+  const keyConcepts = normalizeObjectArray(raw.keyConcepts, ["title", "explanation"], 5);
+  const commonMisconceptions = normalizeObjectArray(
+    raw.commonMisconceptions,
+    ["misconception", "correction"],
+    4
+  );
+  const teacherNotes = normalizeTeacherNotes(raw.teacherNotes);
+  const classroomActivities = normalizeObjectArray(
+    raw.classroomActivities,
+    ["title", "duration", "instructions"],
+    3
+  );
+  const differentiatedSupport = normalizeDifferentiatedSupport(raw.differentiatedSupport);
+  const extensionQuestions = normalizeStringArray(raw.extensionQuestions, 4);
+  const studentWorksheet = normalizeObjectArray(
+    raw.studentWorksheet,
+    ["taskTitle", "instructions"],
+    4
+  );
 
-  if (!translation || glossary.length === 0 || !simplifiedExplanation || quiz.length === 0) {
+  const enrichmentUsedFallback = Boolean(raw.meta?.enrichmentUsedFallback);
+  const enrichmentAttempted = Boolean(raw.meta?.enrichmentAttempted);
+  const missingCoreSupport =
+    glossary.length === 0 ||
+    !simplifiedExplanation ||
+    (quiz.length === 0 && !quizMissingBecauseOffTopic);
+
+  if (!translation || (!enrichmentAttempted && !enrichmentUsedFallback && missingCoreSupport)) {
     return createLocalFallbackLesson(fallbackInput);
   }
+
+  if (!simplifiedExplanation && (enrichmentAttempted || enrichmentUsedFallback)) {
+    simplifiedExplanation = getSafeEnrichmentFallbackExplanation(fallbackInput.targetLanguage);
+  }
+
+  const supportSummary = getGeneratedSupportFieldSummary({
+    glossary,
+    quiz,
+    learningObjectives,
+    keyConcepts,
+    commonMisconceptions,
+    teacherNotes,
+    classroomActivities,
+    differentiatedSupport,
+    extensionQuestions,
+    studentWorksheet,
+  });
+  const teachingSupportFallbackUsed = Boolean(
+    raw.meta?.teachingSupportFallbackUsed ||
+      enrichmentUsedFallback ||
+      (enrichmentAttempted && missingCoreSupport)
+  );
+  const supportSource =
+    raw.meta?.supportSource ||
+    (teachingSupportFallbackUsed
+      ? raw.meta?.provider === MODEL_API_CONFIG.provider || raw.meta?.provider === "online-api"
+        ? "mixed-online-defaults"
+        : "local-fallback"
+      : "online-api");
 
   return {
     lessonTitle: String(
@@ -2207,6 +3705,14 @@ function normalizeLessonResult(raw, fallbackInput) {
     translation,
     glossary,
     simplifiedExplanation,
+    learningObjectives,
+    keyConcepts,
+    commonMisconceptions,
+    teacherNotes,
+    classroomActivities,
+    differentiatedSupport,
+    extensionQuestions,
+    studentWorksheet,
     quizSettings,
     quiz,
     mode: fallbackInput.mode,
@@ -2214,8 +3720,45 @@ function normalizeLessonResult(raw, fallbackInput) {
       ...(raw.meta || {}),
       usedFallback: Boolean(raw.meta?.usedFallback),
       reason: raw.meta?.reason || "",
+      enrichmentQualityVersion: ENRICHMENT_QUALITY_VERSION,
+      enrichmentAttempted,
+      enrichmentRetryAttempted: Boolean(raw.meta?.enrichmentRetryAttempted),
+      enrichmentFirstAttemptEmpty: Boolean(raw.meta?.enrichmentFirstAttemptEmpty),
+      enrichmentFirstAttemptInvalid: Boolean(raw.meta?.enrichmentFirstAttemptInvalid),
+      enrichmentRichRetryAttempted: Boolean(raw.meta?.enrichmentRichRetryAttempted),
+      enrichmentCompactCompleteRetryAttempted: Boolean(
+        raw.meta?.enrichmentCompactCompleteRetryAttempted || raw.meta?.enrichmentRichRetryAttempted
+      ),
+      enrichmentMinimalFallbackAttempted: Boolean(raw.meta?.enrichmentMinimalFallbackAttempted),
+      enrichmentUsedFallback,
+      enrichmentFailureReason: raw.meta?.enrichmentFailureReason || "",
+      teachingSupportFallbackUsed,
+      teachingSupportFallbackReason:
+        raw.meta?.teachingSupportFallbackReason ||
+        (teachingSupportFallbackUsed ? raw.meta?.enrichmentFailureReason || "teaching_support_partially_generated" : ""),
+      supportSource,
+      kazakhPromptMode: raw.meta?.kazakhPromptMode || "",
+      lessonTitleWasUserProvided: Boolean(raw.meta?.lessonTitleWasUserProvided),
+      lessonTitleDerivedFromFile: Boolean(raw.meta?.lessonTitleDerivedFromFile),
+      lessonTitleUsedForGeneration: quizGrounding.lessonTitleUsedForGeneration,
+      lessonTitleMismatchSuspected: quizGrounding.lessonTitleMismatchSuspected,
+      droppedOffTopicQuizItems: quizGrounding.droppedOffTopicQuizItems,
       pipelineVersion: PIPELINE_VERSION,
       enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
+      generatedSupportFields: supportSummary.generatedSupportFields,
+      missingOptionalSupportFields: supportSummary.missingOptionalSupportFields,
+      supportFieldCounts: getSupportFieldCounts({
+        glossary,
+        quiz,
+        learningObjectives,
+        keyConcepts,
+        commonMisconceptions,
+        teacherNotes,
+        classroomActivities,
+        differentiatedSupport,
+        extensionQuestions,
+        studentWorksheet,
+      }),
     },
   };
 }
@@ -2356,6 +3899,7 @@ function createSingleBlockFallbackDebugEntry(item, reason, targetLanguage = "") 
   const block = item?.block || {};
   const originalIndex = Number.isInteger(item?.originalIndex) ? item.originalIndex : 0;
   const sourceText = String(block.text || "");
+  const classification = classifyTranslationBlock(sourceText, targetLanguage, block);
   return {
     index: originalIndex,
     batchIndex: item?.batchIndex,
@@ -2373,6 +3917,11 @@ function createSingleBlockFallbackDebugEntry(item, reason, targetLanguage = "") 
     retryFixed: false,
     preserved: true,
     severity: "fatal",
+    validationSeverity: "fatal",
+    blockKind: classification.blockKind,
+    expectedAction: classification.expectedAction,
+    classificationConfidence: classification.confidence,
+    preserveJustification: classification.preserveJustification || null,
     translatedText: sourceText,
     textPreview: sourceText.slice(0, 140),
     frontendFlagIsFormula: Boolean(block.isFormula),
@@ -2396,6 +3945,11 @@ function createEmptyDebugSummary() {
     preserved: 0,
     unchangedAfterTranslate: 0,
     suspicious: 0,
+    blockKindCounts: {},
+    warningSuspiciousCount: 0,
+    fatalSuspiciousCount: 0,
+    preserveAcceptedCount: 0,
+    preserveWarningCount: 0,
   };
 }
 
@@ -2406,6 +3960,13 @@ function accumulateDebugSummary(summary, addition) {
   summary.preserved += Number(next.preserved || 0);
   summary.unchangedAfterTranslate += Number(next.unchangedAfterTranslate || 0);
   summary.suspicious += Number(next.suspicious || 0);
+  summary.warningSuspiciousCount += Number(next.warningSuspiciousCount || 0);
+  summary.fatalSuspiciousCount += Number(next.fatalSuspiciousCount || 0);
+  summary.preserveAcceptedCount += Number(next.preserveAcceptedCount || 0);
+  summary.preserveWarningCount += Number(next.preserveWarningCount || 0);
+  Object.entries(next.blockKindCounts || {}).forEach(([kind, count]) => {
+    summary.blockKindCounts[kind] = (summary.blockKindCounts[kind] || 0) + Number(count || 0);
+  });
   return summary;
 }
 
@@ -2428,6 +3989,9 @@ function logDocumentTranslationDebug(label, meta, translationsById, blocks) {
       blockType: entry.blockType || "",
       sourceLocation: entry.sourceLocation || "",
       sourceText: String(entry.sourceText || entry.textPreview || "").slice(0, 120),
+      blockKind: entry.blockKind || "",
+      expectedAction: entry.expectedAction || "",
+      validationSeverity: entry.validationSeverity || entry.severity || "",
       apiAction: entry.apiAction || "",
       action: entry.action,
       reason: entry.reason,
@@ -2541,6 +4105,23 @@ function safeDownloadName(value, fallback = "debug-report") {
   return String(value || fallback).replace(/[\\/:*?"<>|]/g, "_").slice(0, 60) || fallback;
 }
 
+function deriveLessonTitleFromFilename(fileName) {
+  const base = String(fileName || "")
+    .replace(/\.[^.]+$/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!base) return "";
+  return base
+    .split(" ")
+    .map((word) => {
+      if (/^\d+$/.test(word)) return word;
+      if (word.length <= 3 && word === word.toUpperCase()) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
+}
+
 function downloadJsonFile(filename, data) {
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: "application/json;charset=utf-8",
@@ -2601,11 +4182,19 @@ function buildDebugReport({
         preserved: false,
         preserveJustification: entry.preserveJustification || null,
         severity: entry.severity || "",
+        validationSeverity: entry.validationSeverity || entry.severity || "accepted",
+        blockKind: entry.blockKind || classifyTranslationBlock(entry.sourceText || entry.textPreview || "", lesson?.targetLanguage).blockKind,
+        expectedAction: entry.expectedAction || classifyTranslationBlock(entry.sourceText || entry.textPreview || "", lesson?.targetLanguage).expectedAction,
+        classificationConfidence: entry.classificationConfidence || 0,
       };
     }
     const detail = detailById[id];
     if (entry.preserveJustification) detail.preserveJustification = entry.preserveJustification;
     if (entry.severity && !detail.severity) detail.severity = entry.severity;
+    if (entry.validationSeverity) detail.validationSeverity = entry.validationSeverity;
+    if (entry.blockKind) detail.blockKind = entry.blockKind;
+    if (entry.expectedAction) detail.expectedAction = entry.expectedAction;
+    if (entry.classificationConfidence) detail.classificationConfidence = entry.classificationConfidence;
     if (Number.isInteger(entry.index)) detail.index = entry.index;
     if (entry.batchIndex) detail.batchIndex = entry.batchIndex;
     if (!detail.sourceTextExcerpt && (entry.sourceText || entry.textPreview)) {
@@ -2664,9 +4253,23 @@ function buildDebugReport({
         preserved: false,
         preserveJustification: null,
         severity: item.severity || "",
+        validationSeverity: item.validationSeverity || item.severity || "warning",
+        blockKind: item.blockKind || "",
+        expectedAction: item.expectedAction || "",
+        classificationConfidence: item.classificationConfidence || 0,
       };
     }
     if (item.severity && !detailById[id].severity) detailById[id].severity = item.severity;
+    if (item.validationSeverity && !detailById[id].validationSeverity) {
+      detailById[id].validationSeverity = item.validationSeverity;
+    }
+    if (item.blockKind && !detailById[id].blockKind) detailById[id].blockKind = item.blockKind;
+    if (item.expectedAction && !detailById[id].expectedAction) {
+      detailById[id].expectedAction = item.expectedAction;
+    }
+    if (item.classificationConfidence && !detailById[id].classificationConfidence) {
+      detailById[id].classificationConfidence = item.classificationConfidence;
+    }
     if (item.preserveJustification && !detailById[id].preserveJustification) {
       detailById[id].preserveJustification = item.preserveJustification;
     }
@@ -2718,10 +4321,20 @@ function buildDebugReport({
         Number(translationMeta.batchSummary?.failedBlocks || 0),
       suspiciousBlockCount:
         Number(debugSummary.suspicious || 0) || suspiciousBlocks.length,
+      blockKindCounts: debugSummary.blockKindCounts || {},
+      warningSuspiciousCount: Number(debugSummary.warningSuspiciousCount || 0),
+      fatalSuspiciousCount: Number(debugSummary.fatalSuspiciousCount || 0),
+      preserveAcceptedCount: Number(debugSummary.preserveAcceptedCount || 0),
+      preserveWarningCount: Number(debugSummary.preserveWarningCount || 0),
+      documentFallbackThresholdTriggered: Boolean(translationMeta.documentFallbackThresholdTriggered),
     },
     fallback: {
       usedFallback: Boolean(teacherMeta?.usedFallback),
       reason: teacherMeta?.reason || "",
+      documentFallbackThreshold: translationMeta.documentFallbackThreshold || null,
+      partialTranslationWarning: Boolean(translationMeta.partialTranslationWarning),
+      teachingSupportFallbackUsed: Boolean(enrichmentMeta.teachingSupportFallbackUsed),
+      teachingSupportFallbackReason: enrichmentMeta.teachingSupportFallbackReason || "",
     },
     generationStageSummary: {
       currentStage: generationProgress?.stage || "",
@@ -2729,6 +4342,56 @@ function buildDebugReport({
       progressLabel: generationProgress?.label || "",
       translationProvider: translationMeta.provider || "",
       enrichmentProvider: enrichmentMeta.provider || "",
+      enrichmentModel: enrichmentMeta.model || MODEL_API_CONFIG.enrichmentModel,
+      enrichmentQualityVersion:
+        enrichmentMeta.enrichmentQualityVersion ||
+        lesson?.meta?.enrichmentQualityVersion ||
+        ENRICHMENT_QUALITY_VERSION,
+      enrichmentAttempted: Boolean(enrichmentMeta.enrichmentAttempted),
+      enrichmentFirstAttemptEmpty: Boolean(enrichmentMeta.enrichmentFirstAttemptEmpty),
+      enrichmentFirstAttemptInvalid: Boolean(enrichmentMeta.enrichmentFirstAttemptInvalid),
+      enrichmentRichRetryAttempted: Boolean(enrichmentMeta.enrichmentRichRetryAttempted),
+      enrichmentCompactCompleteRetryAttempted: Boolean(
+        enrichmentMeta.enrichmentCompactCompleteRetryAttempted ||
+          enrichmentMeta.enrichmentRichRetryAttempted
+      ),
+      enrichmentMinimalFallbackAttempted: Boolean(enrichmentMeta.enrichmentMinimalFallbackAttempted),
+      enrichmentRetryAttempted: Boolean(enrichmentMeta.enrichmentRetryAttempted),
+      enrichmentUsedFallback: Boolean(enrichmentMeta.enrichmentUsedFallback),
+      enrichmentFailureReason: enrichmentMeta.enrichmentFailureReason || "",
+      teachingSupportFallbackUsed: Boolean(enrichmentMeta.teachingSupportFallbackUsed),
+      teachingSupportFallbackReason: enrichmentMeta.teachingSupportFallbackReason || "",
+      supportSource:
+        enrichmentMeta.supportSource ||
+        lesson?.meta?.supportSource ||
+        (enrichmentMeta.enrichmentAttempted ? "online-api" : ""),
+      kazakhPromptMode: enrichmentMeta.kazakhPromptMode || lesson?.meta?.kazakhPromptMode || "",
+      lessonTitleWasUserProvided: Boolean(
+        enrichmentMeta.lessonTitleWasUserProvided ?? lesson?.meta?.lessonTitleWasUserProvided
+      ),
+      lessonTitleDerivedFromFile: Boolean(
+        enrichmentMeta.lessonTitleDerivedFromFile ?? lesson?.meta?.lessonTitleDerivedFromFile
+      ),
+      lessonTitleUsedForGeneration: Boolean(
+        enrichmentMeta.lessonTitleUsedForGeneration ?? lesson?.meta?.lessonTitleUsedForGeneration
+      ),
+      lessonTitleMismatchSuspected: Boolean(
+        enrichmentMeta.lessonTitleMismatchSuspected ?? lesson?.meta?.lessonTitleMismatchSuspected
+      ),
+      droppedOffTopicQuizItems:
+        enrichmentMeta.droppedOffTopicQuizItems || lesson?.meta?.droppedOffTopicQuizItems || [],
+      supportFieldCounts:
+        lesson?.meta?.supportFieldCounts ||
+        enrichmentMeta.supportFieldCounts ||
+        getSupportFieldCounts(lesson),
+      generatedSupportFields:
+        lesson?.meta?.generatedSupportFields ||
+        enrichmentMeta.generatedSupportFields ||
+        getGeneratedSupportFieldSummary(lesson).generatedSupportFields,
+      missingOptionalSupportFields:
+        lesson?.meta?.missingOptionalSupportFields ||
+        enrichmentMeta.missingOptionalSupportFields ||
+        getGeneratedSupportFieldSummary(lesson).missingOptionalSupportFields,
       batchSummary: translationMeta.batchSummary || null,
     },
     status: {
@@ -2792,6 +4455,186 @@ function Header(props) {
         </nav>
       </div>
     </header>
+  `;
+}
+
+function EmptySupportMessage({ text }) {
+  return html`<p className="smallText emptySupportText">${text}</p>`;
+}
+
+function StringListSection({ title, items, emptyText }) {
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  return html`
+    <article className="resultCard">
+      <h3>${title}</h3>
+      ${list.length === 0
+        ? html`<${EmptySupportMessage} text=${emptyText} />`
+        : html`
+            <ul className="supportList">
+              ${list.map((item, index) => html`<li key=${`${title}-${index}`}>${item}</li>`)}
+            </ul>
+          `}
+    </article>
+  `;
+}
+
+function KeyConceptSection({ title, items, emptyText }) {
+  const list = Array.isArray(items) ? items : [];
+  return html`
+    <article className="resultCard">
+      <h3>${title}</h3>
+      ${list.length === 0
+        ? html`<${EmptySupportMessage} text=${emptyText} />`
+        : list.map(
+            (item, index) => html`
+              <div className="supportItem" key=${`${title}-${index}`}>
+                <strong>${item.title}</strong>
+                <p>${item.explanation}</p>
+              </div>
+            `
+          )}
+    </article>
+  `;
+}
+
+function MisconceptionSection({ title, items, emptyText }) {
+  const list = Array.isArray(items) ? items : [];
+  return html`
+    <article className="resultCard">
+      <h3>${title}</h3>
+      ${list.length === 0
+        ? html`<${EmptySupportMessage} text=${emptyText} />`
+        : list.map(
+            (item, index) => html`
+              <div className="supportItem" key=${`${title}-${index}`}>
+                <p><strong>${item.misconception}</strong></p>
+                <p>${item.correction}</p>
+              </div>
+            `
+          )}
+    </article>
+  `;
+}
+
+function ActivitiesSection({ title, items, t, emptyText }) {
+  const list = Array.isArray(items) ? items : [];
+  return html`
+    <article className="resultCard">
+      <h3>${title}</h3>
+      ${list.length === 0
+        ? html`<${EmptySupportMessage} text=${emptyText} />`
+        : list.map(
+            (item, index) => html`
+              <div className="supportItem" key=${`${title}-${index}`}>
+                <strong>${item.title}</strong>
+                ${item.duration && html`<p className="smallText">${t.durationLabel} ${item.duration}</p>`}
+                <p>${item.instructions}</p>
+              </div>
+            `
+          )}
+    </article>
+  `;
+}
+
+function DifferentiatedSupportSection({ title, support, t, emptyText }) {
+  const value = support || {};
+  const hasContent = Object.values(value).some(Boolean);
+  return html`
+    <article className="resultCard">
+      <h3>${title}</h3>
+      ${!hasContent && html`<${EmptySupportMessage} text=${emptyText} />`}
+      ${value.strugglingLearners &&
+      html`<p><strong>${t.strugglingLearners}:</strong> ${value.strugglingLearners}</p>`}
+      ${value.advancedLearners &&
+      html`<p><strong>${t.advancedLearners}:</strong> ${value.advancedLearners}</p>`}
+      ${value.languageSupport &&
+      html`<p><strong>${t.languageSupport}:</strong> ${value.languageSupport}</p>`}
+    </article>
+  `;
+}
+
+function WorksheetSection({ title, items, emptyText }) {
+  const list = Array.isArray(items) ? items : [];
+  return html`
+    <article className="resultCard">
+      <h3>${title}</h3>
+      ${list.length === 0
+        ? html`<${EmptySupportMessage} text=${emptyText} />`
+        : list.map(
+            (item, index) => html`
+              <div className="supportItem" key=${`${title}-${index}`}>
+                <strong>${item.taskTitle}</strong>
+                <p>${item.instructions}</p>
+              </div>
+            `
+          )}
+    </article>
+  `;
+}
+
+function TeacherNotesSection({ title, notes, emptyText }) {
+  const list = Array.isArray(notes) ? notes.filter(Boolean) : [];
+  const text = !Array.isArray(notes) ? String(notes || "").trim() : "";
+  return html`
+    <article className="resultCard">
+      <h3>${title}</h3>
+      ${list.length === 0 && !text
+        ? html`<${EmptySupportMessage} text=${emptyText} />`
+        : list.length > 0
+        ? html`<ul className="supportList">${list.map((item, index) => html`<li key=${index}>${item}</li>`)}</ul>`
+        : html`<p>${text}</p>`}
+    </article>
+  `;
+}
+
+function LessonSupportSections({ lesson, t, audience = "teacher" }) {
+  if (!lesson) return null;
+  return html`
+    <${StringListSection}
+      title=${t.learningObjectives}
+      items=${lesson.learningObjectives}
+      emptyText=${t.noLearningObjectivesGenerated}
+    />
+    <${KeyConceptSection}
+      title=${t.keyConcepts}
+      items=${lesson.keyConcepts}
+      emptyText=${t.noKeyConceptsGenerated}
+    />
+    ${audience === "teacher" &&
+    html`
+      <${MisconceptionSection}
+        title=${t.commonMisconceptions}
+        items=${lesson.commonMisconceptions}
+        emptyText=${t.noCommonMisconceptionsGenerated}
+      />
+      <${TeacherNotesSection}
+        title=${t.teacherNotes}
+        notes=${lesson.teacherNotes}
+        emptyText=${t.noTeacherNotesGenerated}
+      />
+      <${ActivitiesSection}
+        title=${t.classroomActivities}
+        items=${lesson.classroomActivities}
+        t=${t}
+        emptyText=${t.noClassroomActivitiesGenerated}
+      />
+      <${DifferentiatedSupportSection}
+        title=${t.differentiatedSupport}
+        support=${lesson.differentiatedSupport}
+        t=${t}
+        emptyText=${t.noDifferentiatedSupportGenerated}
+      />
+    `}
+    <${StringListSection}
+      title=${t.extensionQuestions}
+      items=${lesson.extensionQuestions}
+      emptyText=${t.noExtensionQuestionsGenerated}
+    />
+    <${WorksheetSection}
+      title=${t.studentWorksheet}
+      items=${lesson.studentWorksheet}
+      emptyText=${t.noStudentWorksheetGenerated}
+    />
   `;
 }
 
@@ -2995,6 +4838,8 @@ function LessonResults(props) {
               onUpdateLesson({ ...lesson, simplifiedExplanation: e.target.value })}
           ></textarea>
         </article>
+
+        <${LessonSupportSections} lesson=${lesson} t=${t} audience="teacher" />
 
         <article className="resultCard">
           <h3>${t.quizPreview}</h3>
@@ -3359,8 +5204,9 @@ function StudentWorkspace(props) {
             </article>
             <article className="resultCard">
               <h3>${t.simplifiedExplanation}</h3>
-              <p>${studentLesson.simplifiedExplanation}</p>
+              <p className="preLineText">${studentLesson.simplifiedExplanation}</p>
             </article>
+            <${LessonSupportSections} lesson=${studentLesson} t=${t} audience="student" />
             <article className="resultCard">
               <h3>${t.practiceQuiz}</h3>
               ${(studentLesson.quiz || []).map(
@@ -3436,10 +5282,10 @@ function App() {
   const [mode, setMode] = useState("teacher");
   const t = getUiText(uiLanguage);
 
-  const [lessonTitle, setLessonTitle] = useState("Photosynthesis Introduction");
-  const [sourceText, setSourceText] = useState(
-    "Photosynthesis is the process by which green plants use sunlight to make food."
-  );
+  const [lessonTitle, setLessonTitle] = useState("");
+  const [lessonTitleWasUserProvided, setLessonTitleWasUserProvided] = useState(false);
+  const [lessonTitleDerivedFromFile, setLessonTitleDerivedFromFile] = useState(false);
+  const [sourceText, setSourceText] = useState("");
   const [targetLanguage, setTargetLanguage] = useState("Chinese");
   const [quizSettings, setQuizSettings] = useState(defaultQuizSettings);
 
@@ -3610,7 +5456,26 @@ function App() {
     setHash(nextMode === "teacher" ? "teacher" : "student");
   }
 
+  function handleLessonTitleChange(nextTitle) {
+    setLessonTitle(nextTitle);
+    setLessonTitleWasUserProvided(Boolean(String(nextTitle || "").trim()));
+    setLessonTitleDerivedFromFile(false);
+  }
+
+  function deriveTitleFromUploadIfNeeded(fileName) {
+    if (lessonTitle.trim()) return;
+    const derivedTitle = deriveLessonTitleFromFilename(fileName);
+    if (!derivedTitle) return;
+    setLessonTitle(derivedTitle);
+    setLessonTitleWasUserProvided(false);
+    setLessonTitleDerivedFromFile(true);
+  }
+
   function useManualTextInput() {
+    if (lessonTitleDerivedFromFile && !lessonTitleWasUserProvided) {
+      setLessonTitle("");
+      setLessonTitleDerivedFromFile(false);
+    }
     setDocumentContext({
       sourceType: "text",
       fileName: "",
@@ -3669,6 +5534,7 @@ function App() {
         setDocumentSummary(t.pdfConversionSummary);
         const convertedFile = await convertPdfToDocxFile(file);
         const parsed = await importDocxFile(convertedFile);
+        deriveTitleFromUploadIfNeeded(file.name);
         setSourceText(parsed.fullText || "");
         setDocumentContext({
           sourceType: "pdf-converted-docx",
@@ -3693,6 +5559,7 @@ function App() {
       } else if (lowerName.endsWith(".docx")) {
         const parsed = await importDocxFile(file);
         // Preview text is for UI display/debug. DOCX translation uses structured blocks only.
+        deriveTitleFromUploadIfNeeded(file.name);
         setSourceText(parsed.fullText || "");
         setDocumentContext({
           sourceType: "docx",
@@ -3850,7 +5717,11 @@ function App() {
 
     const retryIds = new Set(
       (Array.isArray(result.meta?.suspiciousBlocks) ? result.meta.suspiciousBlocks : [])
-        .filter((item) => item?.severity !== "warning")
+        .filter(
+          (item) =>
+            item?.severity !== "warning" ||
+            (item?.expectedAction && item.expectedAction !== "preserve")
+        )
         .map((item) => String(item.id || ""))
         .filter(Boolean)
     );
@@ -3903,11 +5774,21 @@ function App() {
             Array.isArray(retryResult.meta?.suspiciousBlocks) &&
             retryResult.meta.suspiciousBlocks.length > 0
           ) {
-            throw new Error(
-              retryResult.meta.suspiciousBlocks
-                .map((item) => `${item.id}: ${item.reasons.join(",")}`)
-                .join(" | ")
+            const fatalRetryIssues = retryResult.meta.suspiciousBlocks.filter(
+              (item) => item?.severity !== "warning"
             );
+            if (fatalRetryIssues.length === 0) {
+              console.warn(
+                "[Translation retry] Warning-level issue accepted after retry",
+                retryResult.meta.suspiciousBlocks
+              );
+            } else {
+              throw new Error(
+                fatalRetryIssues
+                  .map((item) => `${item.id}: ${item.reasons.join(",")}`)
+                  .join(" | ")
+              );
+            }
           }
 
           result.translationsById[block.id] =
@@ -3960,35 +5841,63 @@ function App() {
           );
         } catch (retryErr) {
           if (isGenerationCancelledError(retryErr)) throw retryErr;
+          const classification = classifyTranslationBlock(block.text, targetLanguage, block);
           result.translationsById[block.id] = block.text;
           result.meta.retrySummary.preservedAfterRetry += 1;
           unresolvedSuspiciousBlocks.push({
             id: block.id,
             reasons: [retryErr?.message || "strict_retry_failed"],
+            severity: classification.validationSeverity || "fatal",
+            validationSeverity: classification.validationSeverity || "fatal",
+            blockKind: classification.blockKind,
+            expectedAction: classification.expectedAction,
+            classificationConfidence: classification.confidence,
+            preserveJustification: classification.preserveJustification || "",
           });
           result.meta.reason = mergeReasonList([
             result.meta.reason,
             `strict_retry_failed:${block.id}:${retryErr?.message || t.unknownBlockError}`,
           ]);
-          result.meta.debugEntries.push(
-            createSingleBlockFallbackDebugEntry(
-              { block, originalIndex: blocks.indexOf(block) },
-              retryErr?.message || "strict_retry_failed",
-              targetLanguage
-            )
+          const fallbackEntry = createSingleBlockFallbackDebugEntry(
+            { block, originalIndex: blocks.indexOf(block) },
+            retryErr?.message || "strict_retry_failed",
+            targetLanguage
           );
+          result.meta.debugEntries.push(fallbackEntry);
           if (forceRetryAll) {
             result.meta.debugSummary.total += 1;
           }
+          result.meta.debugSummary.blockKindCounts[fallbackEntry.blockKind] =
+            (result.meta.debugSummary.blockKindCounts[fallbackEntry.blockKind] || 0) + 1;
           result.meta.debugSummary.preserved += 1;
+          if (fallbackEntry.validationSeverity === "warning") {
+            result.meta.debugSummary.warningSuspiciousCount += 1;
+            result.meta.debugSummary.preserveWarningCount += 1;
+          } else {
+            result.meta.debugSummary.fatalSuspiciousCount += 1;
+            result.meta.debugSummary.preserveWarningCount += 1;
+          }
           result.meta.debugSummary.unchangedAfterTranslate += 1;
           result.meta.debugSummary.suspicious += 1;
         }
       }
       result.meta.suspiciousBlocks = unresolvedSuspiciousBlocks;
-      result.meta.usedFallback = result.meta.retrySummary.preservedAfterRetry > 0;
+      const thresholdInfo = getTranslationFailureThresholdInfo(blocks, {
+        ...result.meta,
+        targetLanguage,
+      });
+      result.meta.documentFallbackThreshold = thresholdInfo;
+      result.meta.documentFallbackThresholdTriggered = thresholdInfo.triggered;
+      result.meta.partialTranslationWarning =
+        Number(result.meta.retrySummary.preservedAfterRetry || 0) > 0 && !thresholdInfo.triggered;
+      result.meta.usedFallback = thresholdInfo.triggered;
       if (!result.meta.usedFallback) {
-        result.meta.reason = "";
+        result.meta.reason = result.meta.partialTranslationWarning
+          ? mergeReasonList([
+              "partial_block_translation_warning",
+              `${thresholdInfo.fatalFailures}/${thresholdInfo.translatableCount} translatable blocks preserved after retry`,
+            ])
+          : "";
       }
     }
 
@@ -4024,6 +5933,8 @@ function App() {
       uniqueRequested: 0,
     };
     let usedFallback = false;
+    let partialTranslationWarning = false;
+    let preservedAfterRetry = 0;
     let retriedBlocks = 0;
     let failedBlocks = 0;
 
@@ -4082,9 +5993,22 @@ function App() {
             );
           }
         }
+        if (batchResult.meta?.partialTranslationWarning) {
+          partialTranslationWarning = true;
+          if (batchResult.meta?.reason) {
+            aggregatedReasons.push(
+              t.docxBatchReason(
+                batchIndex + 1,
+                batches.length,
+                batchResult.meta.reason
+              )
+            );
+          }
+        }
+        preservedAfterRetry += Number(batchResult.meta?.retrySummary?.preservedAfterRetry || 0);
       } catch (batchErr) {
         if (isGenerationCancelledError(batchErr)) throw batchErr;
-        usedFallback = true;
+        partialTranslationWarning = true;
         aggregatedReasons.push(
           t.docxBatchFailedReason(
             batchIndex + 1,
@@ -4149,9 +6073,25 @@ function App() {
                 );
               }
             }
+            if (singleResult.meta?.partialTranslationWarning) {
+              partialTranslationWarning = true;
+              if (singleResult.meta?.reason) {
+                aggregatedReasons.push(
+                  t.docxBatchBlockReason(
+                    batchIndex + 1,
+                    batches.length,
+                    blockIndex + 1,
+                    batch.items.length,
+                    singleResult.meta.reason
+                  )
+                );
+              }
+            }
+            preservedAfterRetry += Number(singleResult.meta?.retrySummary?.preservedAfterRetry || 0);
           } catch (singleErr) {
             if (isGenerationCancelledError(singleErr)) throw singleErr;
             failedBlocks += 1;
+            preservedAfterRetry += 1;
             translationsById[item.block.id] = item.block.text;
             aggregatedDebugEntries.push(
               createSingleBlockFallbackDebugEntry(
@@ -4190,6 +6130,21 @@ function App() {
       }
     }
 
+    const thresholdInfo = getTranslationFailureThresholdInfo(blocks, {
+      targetLanguage,
+      debugSummary: aggregatedSummary,
+      retrySummary: { preservedAfterRetry },
+      suspiciousBlocks: aggregatedDebugEntries
+        .filter((entry) => Array.isArray(entry.validationReasons) && entry.validationReasons.length > 0)
+        .map((entry) => ({
+          id: entry.id,
+          severity: entry.severity,
+          validationSeverity: entry.validationSeverity,
+        })),
+    });
+    usedFallback = usedFallback || thresholdInfo.triggered;
+    partialTranslationWarning = partialTranslationWarning || (preservedAfterRetry > 0 && !usedFallback);
+
     const meta = {
       usedFallback,
       reason: mergeReasonList(aggregatedReasons),
@@ -4200,10 +6155,14 @@ function App() {
       debugEntries: aggregatedDebugEntries,
       debugSummary: aggregatedSummary,
       cacheSummary: aggregatedCacheSummary,
+      partialTranslationWarning,
+      documentFallbackThreshold: thresholdInfo,
+      documentFallbackThresholdTriggered: thresholdInfo.triggered,
       batchSummary: {
         totalBatches: batches.length,
         retriedBlocks,
         failedBlocks,
+        preservedAfterRetry,
         maxBlocksPerBatch: DOCX_TRANSLATION_BATCH_MAX_BLOCKS,
         maxCharsPerBatch: DOCX_TRANSLATION_BATCH_MAX_CHARS,
         shortBlockMaxChars: DOCX_TRANSLATION_SHORT_BLOCK_MAX_CHARS,
@@ -4245,6 +6204,15 @@ function App() {
       targetLanguage,
       mode,
       quizSettings: normalizeQuizSettings(quizSettings),
+      sourceType: documentContext.sourceType || "text",
+      sourceFileName:
+        documentContext.originalFileName ||
+        documentContext.fileName ||
+        documentContext.convertedDocxFileName ||
+        "",
+      targetAudience: "beginner/intermediate students",
+      lessonTitleWasUserProvided,
+      lessonTitleDerivedFromFile,
     };
 
     if (
@@ -4282,23 +6250,25 @@ function App() {
             percent: 88,
             label: t.generatingGlossaryQuiz,
           }, runContext);
+          const enrichmentInput = {
+            ...fallbackInput,
+            blockKindSummary: translationResult.meta?.debugSummary?.blockKindCounts || {},
+          };
           const aiPayload = await generateTeachingSupportWithModel(
-            fallbackInput,
+            enrichmentInput,
             combinedTranslation,
             runContext
           );
           assertActiveGenerationRun(runContext);
           aiLessonBase = normalizeLessonResult(aiPayload, fallbackInput);
-          aiLessonMeta = aiPayload.meta || aiLessonBase.meta || aiLessonMeta;
+          aiLessonMeta = aiLessonBase.meta || aiPayload.meta || aiLessonMeta;
         } catch (lessonErr) {
           if (isGenerationCancelledError(lessonErr)) throw lessonErr;
-          aiLessonBase = createLocalFallbackLesson(fallbackInput);
-          aiLessonMeta = {
-            usedFallback: true,
+          aiLessonBase = createSafeEnrichmentFallbackLesson(fallbackInput, combinedTranslation, {
             reason: lessonErr?.message || t.lessonSupportFailed,
-            pipelineVersion: PIPELINE_VERSION,
-            enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
-          };
+            retryAttempted: true,
+          });
+          aiLessonMeta = aiLessonBase.meta;
         }
 
         const nextLesson = {
@@ -4349,6 +6319,15 @@ function App() {
         if (usedFallback) {
           setGenerationStatus("error", t.docxGenerationFallbackUsed(fallbackReason), runContext);
           markGenerationProgressError(runContext);
+        } else if (aiLessonMeta?.teachingSupportFallbackUsed || aiLessonMeta?.enrichmentUsedFallback) {
+          setGenerationStatus("info", t.teachingSupportFallbackUsed, runContext);
+          updateGenerationProgress({
+            stage: "done",
+            current: 1,
+            total: 1,
+            percent: 100,
+            label: t.progressComplete,
+          }, runContext);
         } else {
           setGenerationStatus("info", t.docxBatchCompleted(summary), runContext);
           updateGenerationProgress({
@@ -4458,23 +6437,25 @@ function App() {
       let lessonBase;
       let lessonMeta = { usedFallback: false, reason: "" };
       try {
+        const enrichmentInput = {
+          ...fallbackInput,
+          blockKindSummary: translationResult.meta?.debugSummary?.blockKindCounts || {},
+        };
         const payload = await generateTeachingSupportWithModel(
-          fallbackInput,
+          enrichmentInput,
           completedTranslation,
           runContext
         );
         assertActiveGenerationRun(runContext);
         lessonBase = normalizeLessonResult(payload, fallbackInput);
-        lessonMeta = payload.meta || lessonBase.meta || lessonMeta;
+        lessonMeta = lessonBase.meta || payload.meta || lessonMeta;
       } catch (lessonErr) {
         if (isGenerationCancelledError(lessonErr)) throw lessonErr;
-        lessonBase = createLocalFallbackLesson(fallbackInput);
-        lessonMeta = {
-          usedFallback: true,
+        lessonBase = createSafeEnrichmentFallbackLesson(fallbackInput, completedTranslation, {
           reason: lessonErr?.message || t.lessonSupportFailed,
-          pipelineVersion: PIPELINE_VERSION,
-          enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
-        };
+          retryAttempted: true,
+        });
+        lessonMeta = lessonBase.meta;
       }
       const nextLesson = {
         ...lessonBase,
@@ -4517,6 +6498,15 @@ function App() {
           runContext
         );
         markGenerationProgressError(runContext);
+      } else if (lessonMeta?.teachingSupportFallbackUsed || lessonMeta?.enrichmentUsedFallback) {
+        setGenerationStatus("info", t.teachingSupportFallbackUsed, runContext);
+        updateGenerationProgress({
+          stage: "done",
+          current: 1,
+          total: 1,
+          percent: 100,
+          label: t.progressComplete,
+        }, runContext);
       } else {
         setGenerationStatus("info", t.aiLearningSupportGenerated(documentMessage), runContext);
         updateGenerationProgress({
@@ -4581,6 +6571,14 @@ function App() {
       translation: teacherLesson.translation,
       glossary: teacherLesson.glossary,
       simplifiedExplanation: teacherLesson.simplifiedExplanation,
+      learningObjectives: teacherLesson.learningObjectives,
+      keyConcepts: teacherLesson.keyConcepts,
+      commonMisconceptions: teacherLesson.commonMisconceptions,
+      teacherNotes: teacherLesson.teacherNotes,
+      classroomActivities: teacherLesson.classroomActivities,
+      differentiatedSupport: teacherLesson.differentiatedSupport,
+      extensionQuestions: teacherLesson.extensionQuestions,
+      studentWorksheet: teacherLesson.studentWorksheet,
       quizSettings: teacherLesson.quizSettings || quizSettings,
       quiz: teacherLesson.quiz,
       mode: teacherLesson.mode || mode,
@@ -4744,7 +6742,7 @@ function App() {
         html`
           <${TeacherWorkspace}
             lessonTitle=${lessonTitle}
-            setLessonTitle=${setLessonTitle}
+            setLessonTitle=${handleLessonTitleChange}
             sourceText=${sourceText}
             setSourceText=${setSourceText}
             targetLanguage=${targetLanguage}

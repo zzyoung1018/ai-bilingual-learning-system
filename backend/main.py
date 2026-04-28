@@ -31,8 +31,8 @@ def get_model_for_stage(stage: str) -> str:
     if stage == "translation":
         return os.getenv("OPENAI_MODEL_TRANSLATION", "gpt-5.5")
     if stage == "json_repair":
-        return os.getenv("OPENAI_MODEL_REPAIR", "gpt-5.4-pro")
-    return os.getenv("OPENAI_MODEL_ENRICHMENT", "gpt-5.4-pro")
+        return os.getenv("OPENAI_MODEL_REPAIR", "gpt-5.5")
+    return os.getenv("OPENAI_MODEL_ENRICHMENT", "gpt-5.5")
 
 
 def safe_download_name(filename: str, fallback: str = "converted.docx") -> str:

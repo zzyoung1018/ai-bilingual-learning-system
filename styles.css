@@ -367,6 +367,40 @@ select {
   line-height: 1.5;
 }
 
+.supportList {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.55;
+}
+
+.supportList li + li {
+  margin-top: 6px;
+}
+
+.supportItem strong {
+  color: var(--ink);
+}
+
+.supportItem + .supportItem {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.supportItem p {
+  margin: 6px 0 0;
+  line-height: 1.55;
+}
+
+.preLineText {
+  white-space: pre-line;
+  line-height: 1.6;
+}
+
+.emptySupportText {
+  font-style: italic;
+}
+
 .sectionDesc {
   margin-top: -4px;
   color: var(--muted);
