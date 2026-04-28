@@ -81,6 +81,8 @@ def health():
     return {
         "status": "ok",
         "provider": "online-api",
+        "has_api_key": bool(os.getenv("OPENAI_API_KEY")),
+        "base_url_configured": bool(os.getenv("OPENAI_BASE_URL")),
         "models": {
             "translation": get_model_for_stage("translation"),
             "enrichment": get_model_for_stage("enrichment"),

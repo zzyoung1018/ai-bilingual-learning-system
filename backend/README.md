@@ -13,7 +13,21 @@ cp .env.example .env
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Before starting, edit `.env` and set `OPENAI_API_KEY` plus `OPENAI_BASE_URL`.
+Before starting, edit `.env` and set `OPENAI_API_KEY` plus `OPENAI_BASE_URL`. Optional model variables are `OPENAI_MODEL_TRANSLATION`, `OPENAI_MODEL_ENRICHMENT`, and `OPENAI_MODEL_REPAIR`.
+
+You can also run from the project root:
+
+```bash
+./scripts/start_backend.sh
+```
+
+## Health check
+
+```bash
+curl http://127.0.0.1:8000/api/health
+```
+
+The health response reports model names and configuration booleans. It never returns the API key or base URL value.
 
 ## PDF conversion
 
