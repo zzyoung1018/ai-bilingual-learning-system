@@ -15,7 +15,23 @@ export const MODEL_API_CONFIG = {
   repairModel: "gpt-5.5",
 };
 
+function assertValidChatRequestBody(requestBody) {
+  if (!requestBody || typeof requestBody !== "object" || Array.isArray(requestBody)) {
+    throw new Error("Invalid chat request body: expected object with stage/messages/format/options");
+  }
+  if (!requestBody.stage || typeof requestBody.stage !== "string") {
+    throw new Error("Invalid chat request body: missing or invalid stage field");
+  }
+  if (!Array.isArray(requestBody.messages)) {
+    throw new Error("Invalid chat request body: messages must be an array");
+  }
+  if (!requestBody.format || typeof requestBody.format !== "string") {
+    throw new Error("Invalid chat request body: missing or invalid format field");
+  }
+}
+
 export function postModelChat(requestBody, { signal } = {}) {
+  assertValidChatRequestBody(requestBody);
   return fetch(MODEL_API_CONFIG.chatUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

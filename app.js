@@ -1643,11 +1643,18 @@ function App() {
     }
   }
 
-  async function callModelChatForEnrichment(requestBody, options = {}) {
-    throwIfGenerationCancelled(options);
+  async function callModelChatForEnrichment(messages, options = {}) {
+    const requestBody = {
+      stage: options.stage || "enrichment",
+      messages: Array.isArray(messages) ? messages : [],
+      format: options.format || "json",
+      options: options.options || {},
+    };
+
+    throwIfGenerationCancelled({ signal: options.signal });
     let response;
     try {
-      response = await postModelChat(requestBody, options);
+      response = await postModelChat(requestBody, { signal: options.signal });
     } catch (err) {
       if (isGenerationCancelledError(err)) {
         throw createGenerationCancelledError();
