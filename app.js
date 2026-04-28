@@ -210,7 +210,9 @@ const UI_TEXT = {
     generatingTeachingSupport:
       "Stage 2/2: Generating glossary, explanation, and quiz with the online AI model...",
     teachingSupportFallbackUsed:
-      "Translation completed, but AI teaching support was only partially generated. Basic package loaded.",
+      "Translation completed, but teaching support used local fallback content.",
+    teachingSupportPartiallyGenerated:
+      "Translation completed, but teaching support was partially generated.",
     noStructuredDocxBlocks: "No structured DOCX blocks were found for translation.",
     docxGenerationFallbackUsed: (reason) =>
       `DOCX generation fallback used. ${reason || "AI generation did not fully complete."}`,
@@ -469,7 +471,9 @@ const UI_TEXT = {
     generatingTeachingSupport:
       "2/2 кезең: онлайн AI моделі арқылы глоссарий, түсіндірме және тест жасалып жатыр...",
     teachingSupportFallbackUsed:
-      "Аударма аяқталды, бірақ AI оқу қолдауы жартылай ғана жасалды. Негізгі пакет жүктелді.",
+      "Аударма аяқталды, бірақ оқу қолдауы үшін жергілікті қосалқы мазмұн қолданылды.",
+    teachingSupportPartiallyGenerated:
+      "Аударма аяқталды, бірақ оқу қолдауы жартылай ғана жасалды.",
     noStructuredDocxBlocks:
       "Аударма үшін құрылымды DOCX блоктары табылмады.",
     docxGenerationFallbackUsed: (reason) =>
@@ -619,6 +623,9 @@ const ENRICHMENT_EXCERPT_MAX_CHARS = 1100;
 const ENRICHMENT_MAX_HEADINGS = 12;
 const ENRICHMENT_QUALITY_VERSION = "phase4e-grounded-support-v1";
 const SUPPORT_FIELD_NAMES = [
+  "glossary",
+  "simplifiedExplanation",
+  "quiz",
   "learningObjectives",
   "keyConcepts",
   "commonMisconceptions",
@@ -1364,6 +1371,7 @@ function createSafeEnrichmentFallbackLesson(
     firstAttemptInvalid = false,
     richRetryAttempted = false,
     minimalFallbackAttempted = false,
+    kazakhValidationReasons = [],
   } = {}
 ) {
   const quizSettings = normalizeQuizSettings(fallbackInput.quizSettings);
@@ -1414,6 +1422,15 @@ function createSafeEnrichmentFallbackLesson(
       teachingSupportFallbackReason: reason || getRuntimeUiText().lessonSupportFailed,
       supportSource: "local-fallback",
       kazakhPromptMode: fallbackInput.targetLanguage === "Kazakh" ? "compact-complete" : "",
+      supportCompletenessPassed: false,
+      supportCompletenessReasons: ["local_teaching_support_fallback"],
+      missingCriticalSupportFields: ["glossary", "quiz", "keyConcepts"],
+      supportMissingFieldCompletionAttempted: false,
+      supportMissingFieldCompletionSucceeded: false,
+      kazakhValidationAttempted: fallbackInput.targetLanguage === "Kazakh",
+      kazakhValidationPassed: fallbackInput.targetLanguage === "Kazakh" ? false : true,
+      kazakhLanguageValidationPassed: fallbackInput.targetLanguage === "Kazakh" ? false : true,
+      kazakhValidationReasons: Array.isArray(kazakhValidationReasons) ? kazakhValidationReasons : [],
       lessonTitleWasUserProvided: Boolean(fallbackInput.lessonTitleWasUserProvided),
       lessonTitleDerivedFromFile: Boolean(fallbackInput.lessonTitleDerivedFromFile),
       lessonTitleUsedForGeneration: titleGrounding.lessonTitleUsedForGeneration,
@@ -1888,6 +1905,92 @@ function buildMinimalLessonEnrichmentMessages({
   ];
 }
 
+function buildMissingSupportCompletionMessages({
+  lessonTitle,
+  sourceText,
+  translation,
+  targetLanguage,
+  mode,
+  quizSettings,
+  sourceType,
+  sourceFileName,
+  targetAudience,
+  blockKindSummary,
+  existingSupport,
+  missingFields,
+}) {
+  const context = buildTeachingSupportContext({
+    lessonTitle,
+    sourceText,
+    translation,
+    targetLanguage,
+    sourceType,
+    sourceFileName,
+    targetAudience,
+    blockKindSummary,
+  });
+  const languageInstruction = getEnrichmentLanguageInstruction(targetLanguage);
+  const fieldList = (Array.isArray(missingFields) ? missingFields : [])
+    .map((field) => String(field || "").trim())
+    .filter(Boolean);
+  const allowedSchema =
+    '{"glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"learningObjectives":["string"],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"differentiatedSupport":{"strugglingLearners":"string","advancedLearners":"string","languageSupport":"string"},"extensionQuestions":["string"],"studentWorksheet":[{"taskTitle":"string","instructions":"string"}],"meta":{}}';
+
+  if (targetLanguage === "Kazakh") {
+    return [
+      {
+        role: "system",
+        content:
+          "Complete missing Kazakh teaching-support fields for a bilingual lesson package. Return ONLY strict JSON. No markdown, comments, or text outside JSON. " +
+          "Generate ONLY the requested missing top-level fields and optional meta. Do not repeat fields that are not requested. Do not include translation. " +
+          "Use natural Kazakh Cyrillic. Do not write Russian. Do not use Latin-script Kazakh for ordinary prose. Preserve English technical terms in parentheses only when useful. " +
+          "Use source and translation excerpts as ground truth. The lesson title is metadata only; do not use it as the only source. Do not invent title-only topics. " +
+          "For linear algebra material, generated glossary and quiz items must be about vectors, matrices, linear transformations, mathematical structure, and learning linear algebra when those ideas are present in the context. Never use photosynthesis, plants, leaves, chlorophyll, or sunlight as quiz content or distractors. " +
+          "For Shakespeare biographical material, teacher support should be about Shakespeare's early life, Stratford-upon-Avon, London theatre, performance context, Hamnet, the careful relationship between biography and art, and Shakespeare's legacy when those ideas are present in the context. Famous names and places may be written as Шекспир (Shakespeare), Лондон (London), and Стратфорд (Stratford) when useful. " +
+          `Allowed JSON shape: ${allowedSchema}. ` +
+          "Kazakh field targets when requested: glossary 3-5 entries, quiz 3-4 questions, learningObjectives 2-3, keyConcepts 2-3, commonMisconceptions 1-2, teacherNotes 2-3, classroomActivities 1, differentiatedSupport with at least one useful non-empty field, extensionQuestions 1-2, simplifiedExplanation 1-2 short paragraphs, studentWorksheet 1-2 tasks.",
+      },
+      {
+        role: "user",
+        content:
+          `Display lesson title: ${lessonTitle}\n` +
+          `Target language: Kazakh\n` +
+          `Language rules: ${languageInstruction}\n` +
+          `Learning mode: ${mode}\n` +
+          `Missing fields to generate only:\n${JSON.stringify(fieldList, null, 2)}\n\n` +
+          `Quiz settings:\n${JSON.stringify(quizSettings, null, 2)}\n\n` +
+          `Existing generated support, do not duplicate:\n${JSON.stringify(existingSupport || {}, null, 2)}\n\n` +
+          `Lesson context:\n${JSON.stringify(context, null, 2)}\n\n` +
+          "Return strict JSON containing only the missing requested fields and optional meta.",
+      },
+    ];
+  }
+
+  return [
+    {
+      role: "system",
+      content:
+        "Complete missing teaching-support fields for a bilingual lesson package. Return ONLY strict JSON. No markdown, comments, trailing commas, or text outside JSON. " +
+        "Generate ONLY the requested missing top-level fields and optional meta. Do not repeat fields that are not requested. Do not include translation. " +
+        "Use only the provided source/translation excerpts as ground truth. The lesson title is metadata only; do not use title-only topics. " +
+        `Language rules: ${languageInstruction} ` +
+        `Allowed JSON shape: ${allowedSchema}.`,
+    },
+    {
+      role: "user",
+      content:
+        `Lesson title: ${lessonTitle}\n` +
+        `Target language: ${targetLanguage}\n` +
+        `Learning mode: ${mode}\n` +
+        `Missing fields to generate only:\n${JSON.stringify(fieldList, null, 2)}\n\n` +
+        `Quiz settings:\n${JSON.stringify(quizSettings, null, 2)}\n\n` +
+        `Existing generated support, do not duplicate:\n${JSON.stringify(existingSupport || {}, null, 2)}\n\n` +
+        `Lesson context:\n${JSON.stringify(context, null, 2)}\n\n` +
+        "Return strict JSON containing only the missing requested fields and optional meta.",
+    },
+  ];
+}
+
 function buildCompactRichLessonEnrichmentMessages({
   lessonTitle,
   sourceText,
@@ -1924,8 +2027,9 @@ function buildCompactRichLessonEnrichmentMessages({
           "Return ONLY strict JSON for a complete Kazakh teaching-support package. No markdown. No translation field. " +
           "Use natural Kazakh Cyrillic. Do not write Russian. Do not use Latin-script Kazakh. Preserve English technical terms in parentheses when useful. " +
           titleWarning +
+          "Use source and translation excerpts as the source of truth. Do not generate quiz, glossary, objectives, examples, or worksheet tasks from title-only topics. Do not return the full translation. " +
           "Return every schema field: lessonTitle, glossary, simplifiedExplanation, quiz, learningObjectives, keyConcepts, commonMisconceptions, teacherNotes, classroomActivities, differentiatedSupport, extensionQuestions, studentWorksheet, meta. " +
-          "Keep it short: glossary 5, explanation 2-4 short paragraphs, objectives 3, concepts 3, misconceptions 2, teacherNotes 3 short notes, activities 1, extensionQuestions 2, worksheet 1-2 tasks. Quiz follows settings and must be about the actual lesson context.",
+          "Keep it short: glossary exactly 5, simplifiedExplanation exactly 2 short paragraphs, quiz 3-4 questions, learningObjectives exactly 3, keyConcepts exactly 3, commonMisconceptions exactly 2, teacherNotes 2-3 short notes, classroomActivities exactly 1, differentiatedSupport includes strugglingLearners, advancedLearners, and languageSupport, extensionQuestions exactly 2, studentWorksheet 1-2 tasks. Quiz follows settings and must be about the actual lesson context.",
       },
       {
         role: "user",
@@ -2099,6 +2203,321 @@ function mergeEnrichmentPayloads(primary, supplemental) {
   return result;
 }
 
+const KAZAKH_SPECIFIC_LETTER_PATTERN = /[ӘәҒғҚқҢңӨөҰұҮүҺһІі]/g;
+const COMMON_RUSSIAN_WORDS = new Set([
+  "это",
+  "что",
+  "как",
+  "если",
+  "для",
+  "или",
+  "при",
+  "без",
+  "над",
+  "под",
+  "между",
+  "который",
+  "которая",
+  "которые",
+  "ученик",
+  "ученики",
+  "учитель",
+  "объясните",
+  "выберите",
+  "ответ",
+  "верно",
+  "неверно",
+  "пример",
+  "задание",
+  "понятие",
+]);
+
+function collectSupportTextSegments(lessonLike) {
+  const segments = [];
+  function add(value, path) {
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => add(item, `${path}[${index}]`));
+      return;
+    }
+    if (value && typeof value === "object") {
+      Object.entries(value).forEach(([key, nested]) => add(nested, `${path}.${key}`));
+      return;
+    }
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    if (text) segments.push({ path, text });
+  }
+
+  [
+    "simplifiedExplanation",
+    "learningObjectives",
+    "keyConcepts",
+    "commonMisconceptions",
+    "teacherNotes",
+    "classroomActivities",
+    "differentiatedSupport",
+    "extensionQuestions",
+    "studentWorksheet",
+    "quiz",
+  ].forEach((field) => add(lessonLike?.[field], field));
+  add(
+    (lessonLike?.glossary || []).map((item) => item?.explanation || ""),
+    "glossary.explanation"
+  );
+  return segments;
+}
+
+function getScriptStats(text) {
+  const value = String(text || "");
+  const cyrillic = countMatches(value, /[\u0400-\u04FF]/g);
+  const latin = countMatches(value, /[A-Za-z]/g);
+  const kazakhSpecific = countMatches(value, KAZAKH_SPECIFIC_LETTER_PATTERN);
+  const letters = cyrillic + latin;
+  return {
+    cyrillic,
+    latin,
+    kazakhSpecific,
+    letters,
+    cyrillicRatio: letters === 0 ? 1 : cyrillic / letters,
+    latinRatio: letters === 0 ? 0 : latin / letters,
+  };
+}
+
+function getRussianWordHitCount(text) {
+  const words = String(text || "").toLowerCase().match(/[а-яё]+/gi) || [];
+  return words.filter((word) => COMMON_RUSSIAN_WORDS.has(word)).length;
+}
+
+function getUnsupportedTitleTopicHits(lessonLike) {
+  const titleGrounding = getLessonTitleGroundingInfo({
+    lessonTitle: lessonLike?.lessonTitle,
+    sourceText: lessonLike?.sourceText,
+    translation: lessonLike?.translation,
+  });
+  if (!titleGrounding.lessonTitleMismatchSuspected) {
+    return { ...titleGrounding, hits: [] };
+  }
+
+  const contextText = `${lessonLike?.sourceText || ""}\n${lessonLike?.translation || ""}`.toLowerCase();
+  const bannedTerms = Array.from(
+    new Set(
+      titleGrounding.unsupportedTitleTerms.flatMap((term) => [
+        term,
+        ...(OFF_TOPIC_TERM_EXPANSIONS[term] || []),
+      ])
+    )
+  ).filter((term) => term && !contextText.includes(term.toLowerCase()));
+  if (bannedTerms.length === 0) {
+    return { ...titleGrounding, hits: [] };
+  }
+
+  const supportText = collectSupportTextSegments(lessonLike)
+    .map((segment) => segment.text)
+    .join(" ")
+    .toLowerCase();
+  const hits = bannedTerms.filter((term) => supportText.includes(term.toLowerCase()));
+  return { ...titleGrounding, hits };
+}
+
+function validateKazakhSupportContent(lesson) {
+  if (lesson?.targetLanguage !== "Kazakh") {
+    return { valid: true, reasons: [], titleGrounding: getLessonTitleGroundingInfo(lesson || {}) };
+  }
+
+  const reasons = [];
+  const segments = collectSupportTextSegments(lesson);
+  const proseSegments = segments.filter((segment) => {
+    const stats = getScriptStats(segment.text);
+    return stats.letters >= 16 && !/^(AI|GPT|API|URL|HTML|CSS|SQL|Python|JavaScript)$/i.test(segment.text);
+  });
+
+  let lowCyrillicCount = 0;
+  let latinKazakhLikeCount = 0;
+  let russianLikeCount = 0;
+  proseSegments.forEach((segment) => {
+    const stats = getScriptStats(segment.text);
+    if (stats.cyrillicRatio < 0.45) lowCyrillicCount += 1;
+    if (stats.latinRatio > 0.5 && /(?:q|w|ng|gh|sh|ch|zh|ya|yu|kh)/i.test(segment.text)) {
+      latinKazakhLikeCount += 1;
+    }
+    const russianHits = getRussianWordHitCount(segment.text);
+    if (russianHits >= 3 && stats.kazakhSpecific === 0) russianLikeCount += 1;
+  });
+
+  if (proseSegments.length > 0 && lowCyrillicCount / proseSegments.length > 0.25) {
+    reasons.push("kazakh_support_low_cyrillic_ratio");
+  }
+  if (latinKazakhLikeCount > 0) {
+    reasons.push("kazakh_support_latin_kazakh_detected");
+  }
+  if (russianLikeCount > 0 && russianLikeCount / Math.max(1, proseSegments.length) > 0.15) {
+    reasons.push("kazakh_support_appears_russian");
+  }
+
+  const titleTopic = getUnsupportedTitleTopicHits(lesson);
+  if (titleTopic.hits.length > 0) {
+    reasons.push(`off_topic_title_terms:${titleTopic.hits.join(",")}`);
+  }
+
+  return {
+    valid: reasons.length === 0,
+    reasons,
+    titleGrounding: titleTopic,
+    checkedSegmentCount: proseSegments.length,
+  };
+}
+
+function buildNormalizedSupportPreview(raw, fallbackInput, translation) {
+  const quizSettings = normalizeQuizSettings(raw?.quizSettings || fallbackInput.quizSettings);
+  const normalizedQuiz = normalizeQuizItems(raw?.quiz, quizSettings, fallbackInput.targetLanguage);
+  const quizGrounding = filterOffTopicQuizItems(normalizedQuiz, {
+    lessonTitle: raw?.lessonTitle || fallbackInput.lessonTitle,
+    sourceText: fallbackInput.sourceText,
+    translation,
+  });
+  return {
+    lessonTitle: String(raw?.lessonTitle || fallbackInput.lessonTitle || getRuntimeUiText().untitledLesson).trim(),
+    sourceText: fallbackInput.sourceText,
+    targetLanguage: fallbackInput.targetLanguage,
+    translation,
+    glossary: normalizeGlossaryItems(raw?.glossary),
+    simplifiedExplanation: String(raw?.simplifiedExplanation || raw?.explanation || "").trim(),
+    learningObjectives: normalizeStringArray(raw?.learningObjectives, 5),
+    keyConcepts: normalizeObjectArray(raw?.keyConcepts, ["title", "explanation"], 5),
+    commonMisconceptions: normalizeObjectArray(
+      raw?.commonMisconceptions,
+      ["misconception", "correction"],
+      4
+    ),
+    teacherNotes: normalizeTeacherNotes(raw?.teacherNotes),
+    classroomActivities: normalizeObjectArray(
+      raw?.classroomActivities,
+      ["title", "duration", "instructions"],
+      3
+    ),
+    differentiatedSupport: normalizeDifferentiatedSupport(raw?.differentiatedSupport),
+    extensionQuestions: normalizeStringArray(raw?.extensionQuestions, 4),
+    studentWorksheet: normalizeObjectArray(raw?.studentWorksheet, ["taskTitle", "instructions"], 4),
+    quizSettings,
+    quiz: quizGrounding.quiz,
+    mode: fallbackInput.mode,
+    droppedOffTopicQuizItems: quizGrounding.droppedOffTopicQuizItems,
+    lessonTitleUsedForGeneration: quizGrounding.lessonTitleUsedForGeneration,
+    lessonTitleMismatchSuspected: quizGrounding.lessonTitleMismatchSuspected,
+  };
+}
+
+function validateSupportCompleteness(lessonLike) {
+  const counts = getSupportFieldCounts(lessonLike);
+  const isKazakh = lessonLike?.targetLanguage === "Kazakh";
+  const isTeacherMode = String(lessonLike?.mode || "teacher") === "teacher";
+  const thresholds = isKazakh
+    ? {
+        glossary: 3,
+        quiz: 3,
+        learningObjectives: 2,
+        keyConcepts: 2,
+      }
+    : {
+        glossary: 1,
+        quiz: 1,
+        learningObjectives: 1,
+        keyConcepts: 1,
+      };
+  const missingCriticalSupportFields = [];
+  const supportCompletenessReasons = [];
+
+  Object.entries(thresholds).forEach(([field, minimum]) => {
+    if (Number(counts[field] || 0) < minimum) {
+      missingCriticalSupportFields.push(field);
+      supportCompletenessReasons.push(`${field}_below_minimum:${counts[field] || 0}/${minimum}`);
+    }
+  });
+
+  if (!String(lessonLike?.simplifiedExplanation || "").trim()) {
+    missingCriticalSupportFields.push("simplifiedExplanation");
+    supportCompletenessReasons.push("simplifiedExplanation_empty");
+  }
+
+  if (isTeacherMode) {
+    const teacherMinimums = {
+      commonMisconceptions: 1,
+      teacherNotes: 1,
+      classroomActivities: 1,
+      differentiatedSupport: 1,
+      extensionQuestions: 1,
+      studentWorksheet: 1,
+    };
+    Object.entries(teacherMinimums).forEach(([field, minimum]) => {
+      if (Number(counts[field] || 0) < minimum) {
+        missingCriticalSupportFields.push(field);
+        supportCompletenessReasons.push(`${field}_below_teacher_minimum:${counts[field] || 0}/${minimum}`);
+      }
+    });
+  } else {
+    const hasPracticalSupport =
+      Number(counts.teacherNotes || 0) > 0 ||
+      Number(counts.classroomActivities || 0) > 0 ||
+      Number(counts.studentWorksheet || 0) > 0;
+    if (isKazakh && !hasPracticalSupport) {
+      missingCriticalSupportFields.push("teacherNotes/classroomActivities/studentWorksheet");
+      supportCompletenessReasons.push("kazakh_practical_support_empty");
+    }
+  }
+
+  const allowedCompletionFields = new Set([
+    "glossary",
+    "simplifiedExplanation",
+    "quiz",
+    "learningObjectives",
+    "keyConcepts",
+    "commonMisconceptions",
+    "teacherNotes",
+    "classroomActivities",
+    "differentiatedSupport",
+    "extensionQuestions",
+    "studentWorksheet",
+  ]);
+  const completionFields = missingCriticalSupportFields.filter((field) =>
+    allowedCompletionFields.has(field)
+  );
+  if (isKazakh && Number(counts.studentWorksheet || 0) < 1) {
+    completionFields.push("studentWorksheet");
+  }
+
+  return {
+    supportCompletenessPassed: missingCriticalSupportFields.length === 0,
+    supportCompletenessReasons,
+    missingCriticalSupportFields: Array.from(new Set(missingCriticalSupportFields)),
+    missingCompletionFields: Array.from(new Set(completionFields)),
+    supportFieldCounts: counts,
+  };
+}
+
+function mergeMissingSupportFields(primary, supplemental, fields) {
+  const result = {
+    ...(primary && typeof primary === "object" ? primary : {}),
+  };
+  const patch = supplemental && typeof supplemental === "object" && !Array.isArray(supplemental)
+    ? supplemental
+    : {};
+  (Array.isArray(fields) ? fields : []).forEach((field) => {
+    if (!field || !hasSupportValue(patch[field])) return;
+    if (field === "differentiatedSupport") {
+      result.differentiatedSupport = {
+        ...(result.differentiatedSupport || {}),
+        ...(patch.differentiatedSupport || {}),
+      };
+      return;
+    }
+    result[field] = patch[field];
+  });
+  result.meta = {
+    ...(result.meta || {}),
+    ...(patch.meta || {}),
+  };
+  return result;
+}
+
 async function generateTeachingSupportWithModel(fallbackInput, translation, runContext = null) {
   throwIfGenerationCancelled(runContext);
   const titleGrounding = getLessonTitleGroundingInfo({
@@ -2119,6 +2538,17 @@ async function generateTeachingSupportWithModel(fallbackInput, translation, runC
   let enrichmentMinimalFallbackAttempted = false;
   let minimalFallbackUsed = false;
   let failureReason = "";
+  let kazakhValidationResult = { valid: true, reasons: [] };
+  let kazakhValidationRetryAttempted = false;
+  let supportCompletenessResult = {
+    supportCompletenessPassed: false,
+    supportCompletenessReasons: [],
+    missingCriticalSupportFields: [],
+    missingCompletionFields: [],
+    supportFieldCounts: {},
+  };
+  let supportMissingFieldCompletionAttempted = false;
+  let supportMissingFieldCompletionSucceeded = false;
   try {
     const result = await requestParsedEnrichment(messages, runContext);
     malformedContent = result.content;
@@ -2252,10 +2682,126 @@ async function generateTeachingSupportWithModel(fallbackInput, translation, runC
     }
   }
 
-  const supportSummary = getGeneratedSupportFieldSummary(parsed);
-  const teachingSupportFallbackUsed = Boolean(
-    minimalFallbackUsed || getMissingCoreEnrichmentFields(parsed).length > 0
+  supportCompletenessResult = validateSupportCompleteness(
+    buildNormalizedSupportPreview(parsed, fallbackInput, translation)
   );
+
+  if (
+    !supportCompletenessResult.supportCompletenessPassed &&
+    supportCompletenessResult.missingCompletionFields.length > 0
+  ) {
+    supportMissingFieldCompletionAttempted = true;
+    enrichmentRetryAttempted = true;
+    try {
+      const completionResult = await requestParsedEnrichment(
+        buildMissingSupportCompletionMessages({
+          ...fallbackInput,
+          translation,
+          existingSupport: buildNormalizedSupportPreview(parsed, fallbackInput, translation),
+          missingFields: supportCompletenessResult.missingCompletionFields,
+        }),
+        runContext
+      );
+      parsed = mergeMissingSupportFields(
+        parsed,
+        completionResult.parsed,
+        supportCompletenessResult.missingCompletionFields
+      );
+      supportCompletenessResult = validateSupportCompleteness(
+        buildNormalizedSupportPreview(parsed, fallbackInput, translation)
+      );
+      supportMissingFieldCompletionSucceeded = supportCompletenessResult.supportCompletenessPassed;
+      if (!supportMissingFieldCompletionSucceeded) {
+        failureReason = `support_completion_incomplete:${supportCompletenessResult.supportCompletenessReasons.join(",")}`;
+      }
+    } catch (completionErr) {
+      if (isGenerationCancelledError(completionErr)) throw completionErr;
+      failureReason = formatEnrichmentFailureReason(completionErr);
+      warnEnrichmentParseFailure("missing-field support completion failed.", completionErr);
+    }
+  }
+
+  if (fallbackInput.targetLanguage === "Kazakh") {
+    const lessonForValidation = {
+      ...buildNormalizedSupportPreview(parsed, fallbackInput, translation),
+      lessonTitle: titleGrounding.lessonTitleUsedForGeneration
+        ? parsed.lessonTitle || fallbackInput.lessonTitle
+        : fallbackInput.lessonTitle,
+    };
+    kazakhValidationResult = validateKazakhSupportContent(lessonForValidation);
+
+    if (!kazakhValidationResult.valid) {
+      enrichmentRetryAttempted = true;
+      enrichmentRichRetryAttempted = true;
+      kazakhValidationRetryAttempted = true;
+      failureReason = `kazakh_validation_failed:${kazakhValidationResult.reasons.join(",")}`;
+      warnEnrichmentParseFailure("Kazakh support validation failed; trying compact-complete retry.", {
+        reasons: kazakhValidationResult.reasons,
+      });
+      try {
+        const retryResult = await requestParsedEnrichment(
+          buildCompactRichLessonEnrichmentMessages({
+            ...fallbackInput,
+            translation,
+          }),
+          runContext
+        );
+        parsed = retryResult.parsed;
+        supportCompletenessResult = validateSupportCompleteness(
+          buildNormalizedSupportPreview(parsed, fallbackInput, translation)
+        );
+        supportMissingFieldCompletionSucceeded =
+          supportMissingFieldCompletionAttempted &&
+          supportCompletenessResult.supportCompletenessPassed;
+        kazakhValidationResult = validateKazakhSupportContent({
+          ...buildNormalizedSupportPreview(parsed, fallbackInput, translation),
+          lessonTitle: titleGrounding.lessonTitleUsedForGeneration
+            ? parsed.lessonTitle || fallbackInput.lessonTitle
+            : fallbackInput.lessonTitle,
+        });
+        if (!kazakhValidationResult.valid) {
+          return createSafeEnrichmentFallbackLesson(fallbackInput, translation, {
+            reason: `kazakh_validation_failed_after_retry:${kazakhValidationResult.reasons.join(",")}`,
+            retryAttempted: enrichmentRetryAttempted,
+            firstAttemptEmpty: enrichmentFirstAttemptEmpty,
+            firstAttemptInvalid: enrichmentFirstAttemptInvalid,
+            richRetryAttempted: enrichmentRichRetryAttempted,
+            minimalFallbackAttempted: enrichmentMinimalFallbackAttempted,
+            kazakhValidationReasons: kazakhValidationResult.reasons,
+          });
+        }
+      } catch (retryErr) {
+        if (isGenerationCancelledError(retryErr)) throw retryErr;
+        failureReason = formatEnrichmentFailureReason(retryErr);
+        return createSafeEnrichmentFallbackLesson(fallbackInput, translation, {
+          reason: failureReason || "kazakh_compact_complete_retry_failed",
+          retryAttempted: enrichmentRetryAttempted,
+          firstAttemptEmpty: enrichmentFirstAttemptEmpty,
+          firstAttemptInvalid: enrichmentFirstAttemptInvalid,
+          richRetryAttempted: enrichmentRichRetryAttempted,
+          minimalFallbackAttempted: enrichmentMinimalFallbackAttempted,
+          kazakhValidationReasons: kazakhValidationResult.reasons,
+        });
+      }
+    }
+  }
+
+  supportCompletenessResult = validateSupportCompleteness(
+    buildNormalizedSupportPreview(parsed, fallbackInput, translation)
+  );
+  if (supportMissingFieldCompletionAttempted) {
+    supportMissingFieldCompletionSucceeded = supportCompletenessResult.supportCompletenessPassed;
+  }
+  const normalizedSupportForSummary = buildNormalizedSupportPreview(parsed, fallbackInput, translation);
+  const supportSummary = getGeneratedSupportFieldSummary(normalizedSupportForSummary);
+  const teachingSupportFallbackUsed = Boolean(
+    !supportCompletenessResult.supportCompletenessPassed
+  );
+  const supportSource = teachingSupportFallbackUsed
+    ? "mixed-online-defaults"
+    : supportMissingFieldCompletionAttempted
+    ? "mixed-online-completion"
+    : "online-api";
 
   return {
     ...parsed,
@@ -2275,16 +2821,30 @@ async function generateTeachingSupportWithModel(fallbackInput, translation, runC
       enrichmentCompactCompleteRetryAttempted: enrichmentRichRetryAttempted,
       enrichmentMinimalFallbackAttempted,
       enrichmentRetryAttempted,
-      enrichmentUsedFallback: minimalFallbackUsed,
-      enrichmentFailureReason: minimalFallbackUsed
-        ? failureReason || "minimal_enrichment_fallback_used"
+      enrichmentUsedFallback: Boolean(minimalFallbackUsed && teachingSupportFallbackUsed),
+      enrichmentFailureReason: teachingSupportFallbackUsed
+        ? failureReason || "teaching_support_partially_generated"
         : "",
       teachingSupportFallbackUsed,
       teachingSupportFallbackReason: teachingSupportFallbackUsed
-        ? failureReason || "teaching_support_partially_generated"
+        ? failureReason || supportCompletenessResult.supportCompletenessReasons.join(",") || "teaching_support_partially_generated"
         : "",
-      supportSource: teachingSupportFallbackUsed ? "mixed-online-defaults" : "online-api",
+      supportSource,
+      supportCompletenessPassed: supportCompletenessResult.supportCompletenessPassed,
+      supportCompletenessReasons: supportCompletenessResult.supportCompletenessReasons,
+      missingCriticalSupportFields: supportCompletenessResult.missingCriticalSupportFields,
+      supportMissingFieldCompletionAttempted,
+      supportMissingFieldCompletionSucceeded,
       kazakhPromptMode: fallbackInput.targetLanguage === "Kazakh" ? "compact-complete" : "",
+      kazakhValidationAttempted: fallbackInput.targetLanguage === "Kazakh",
+      kazakhValidationPassed:
+        fallbackInput.targetLanguage === "Kazakh"
+          ? Boolean(kazakhValidationResult.valid && supportCompletenessResult.supportCompletenessPassed)
+          : true,
+      kazakhLanguageValidationPassed:
+        fallbackInput.targetLanguage === "Kazakh" ? Boolean(kazakhValidationResult.valid) : true,
+      kazakhValidationReasons: kazakhValidationResult.reasons || [],
+      kazakhValidationRetryAttempted,
       lessonTitleWasUserProvided: Boolean(fallbackInput.lessonTitleWasUserProvided),
       lessonTitleDerivedFromFile: Boolean(fallbackInput.lessonTitleDerivedFromFile),
       lessonTitleUsedForGeneration: titleGrounding.lessonTitleUsedForGeneration,
@@ -2297,7 +2857,7 @@ async function generateTeachingSupportWithModel(fallbackInput, translation, runC
       enrichmentQualityVersion: ENRICHMENT_QUALITY_VERSION,
       generatedSupportFields: supportSummary.generatedSupportFields,
       missingOptionalSupportFields: supportSummary.missingOptionalSupportFields,
-      supportFieldCounts: getSupportFieldCounts(parsed),
+      supportFieldCounts: supportCompletenessResult.supportFieldCounts,
     },
   };
 }
@@ -3612,13 +4172,19 @@ function filterOffTopicQuizItems(quiz, { lessonTitle, sourceText, translation })
   };
 }
 
-function normalizeLessonResult(raw, fallbackInput) {
+function normalizeLessonResult(raw, fallbackInput, fallbackTranslation = "") {
   if (!raw || typeof raw !== "object") {
+    if (String(fallbackTranslation || "").trim()) {
+      return createSafeEnrichmentFallbackLesson(fallbackInput, fallbackTranslation, {
+        reason: "enrichment_normalization_invalid_payload",
+        retryAttempted: true,
+      });
+    }
     return createLocalFallbackLesson(fallbackInput);
   }
 
   const quizSettings = normalizeQuizSettings(raw.quizSettings || fallbackInput.quizSettings);
-  const translation = String(raw.translation || "").trim();
+  const translation = String(raw.translation || fallbackTranslation || "").trim();
   let simplifiedExplanation = String(
     raw.simplifiedExplanation || raw.explanation || ""
   ).trim();
@@ -3657,14 +4223,21 @@ function normalizeLessonResult(raw, fallbackInput) {
   );
 
   const enrichmentUsedFallback = Boolean(raw.meta?.enrichmentUsedFallback);
-  const enrichmentAttempted = Boolean(raw.meta?.enrichmentAttempted);
+  const enrichmentAttempted = Boolean(raw.meta?.enrichmentAttempted || fallbackTranslation);
   const missingCoreSupport =
     glossary.length === 0 ||
     !simplifiedExplanation ||
     (quiz.length === 0 && !quizMissingBecauseOffTopic);
 
-  if (!translation || (!enrichmentAttempted && !enrichmentUsedFallback && missingCoreSupport)) {
+  if (!translation) {
     return createLocalFallbackLesson(fallbackInput);
+  }
+
+  if (!enrichmentAttempted && !enrichmentUsedFallback && missingCoreSupport) {
+    return createSafeEnrichmentFallbackLesson(fallbackInput, translation, {
+      reason: "enrichment_normalization_missing_core_support",
+      retryAttempted: true,
+    });
   }
 
   if (!simplifiedExplanation && (enrichmentAttempted || enrichmentUsedFallback)) {
@@ -3683,10 +4256,25 @@ function normalizeLessonResult(raw, fallbackInput) {
     extensionQuestions,
     studentWorksheet,
   });
+  const supportCompleteness = validateSupportCompleteness({
+    sourceText: fallbackInput.sourceText,
+    targetLanguage: fallbackInput.targetLanguage,
+    translation,
+    glossary,
+    simplifiedExplanation,
+    learningObjectives,
+    keyConcepts,
+    commonMisconceptions,
+    teacherNotes,
+    classroomActivities,
+    differentiatedSupport,
+    extensionQuestions,
+    studentWorksheet,
+    quiz,
+  });
   const teachingSupportFallbackUsed = Boolean(
     raw.meta?.teachingSupportFallbackUsed ||
-      enrichmentUsedFallback ||
-      (enrichmentAttempted && missingCoreSupport)
+      !supportCompleteness.supportCompletenessPassed
   );
   const supportSource =
     raw.meta?.supportSource ||
@@ -3735,9 +4323,31 @@ function normalizeLessonResult(raw, fallbackInput) {
       teachingSupportFallbackUsed,
       teachingSupportFallbackReason:
         raw.meta?.teachingSupportFallbackReason ||
-        (teachingSupportFallbackUsed ? raw.meta?.enrichmentFailureReason || "teaching_support_partially_generated" : ""),
+        (teachingSupportFallbackUsed
+          ? raw.meta?.enrichmentFailureReason ||
+            supportCompleteness.supportCompletenessReasons.join(",") ||
+            "teaching_support_partially_generated"
+          : ""),
       supportSource,
+      supportCompletenessPassed:
+        raw.meta?.supportCompletenessPassed ?? supportCompleteness.supportCompletenessPassed,
+      supportCompletenessReasons:
+        raw.meta?.supportCompletenessReasons || supportCompleteness.supportCompletenessReasons,
+      missingCriticalSupportFields:
+        raw.meta?.missingCriticalSupportFields || supportCompleteness.missingCriticalSupportFields,
+      supportMissingFieldCompletionAttempted: Boolean(raw.meta?.supportMissingFieldCompletionAttempted),
+      supportMissingFieldCompletionSucceeded: Boolean(raw.meta?.supportMissingFieldCompletionSucceeded),
       kazakhPromptMode: raw.meta?.kazakhPromptMode || "",
+      kazakhValidationAttempted: Boolean(raw.meta?.kazakhValidationAttempted),
+      kazakhValidationPassed:
+        raw.meta?.kazakhValidationPassed ??
+        (fallbackInput.targetLanguage === "Kazakh"
+          ? Boolean(raw.meta?.kazakhLanguageValidationPassed ?? true) &&
+            Boolean(raw.meta?.supportCompletenessPassed ?? supportCompleteness.supportCompletenessPassed)
+          : true),
+      kazakhLanguageValidationPassed: Boolean(raw.meta?.kazakhLanguageValidationPassed ?? true),
+      kazakhValidationReasons: raw.meta?.kazakhValidationReasons || [],
+      kazakhValidationRetryAttempted: Boolean(raw.meta?.kazakhValidationRetryAttempted),
       lessonTitleWasUserProvided: Boolean(raw.meta?.lessonTitleWasUserProvided),
       lessonTitleDerivedFromFile: Boolean(raw.meta?.lessonTitleDerivedFromFile),
       lessonTitleUsedForGeneration: quizGrounding.lessonTitleUsedForGeneration,
@@ -3747,18 +4357,7 @@ function normalizeLessonResult(raw, fallbackInput) {
       enrichmentPromptVersion: ENRICHMENT_PROMPT_VERSION,
       generatedSupportFields: supportSummary.generatedSupportFields,
       missingOptionalSupportFields: supportSummary.missingOptionalSupportFields,
-      supportFieldCounts: getSupportFieldCounts({
-        glossary,
-        quiz,
-        learningObjectives,
-        keyConcepts,
-        commonMisconceptions,
-        teacherNotes,
-        classroomActivities,
-        differentiatedSupport,
-        extensionQuestions,
-        studentWorksheet,
-      }),
+      supportFieldCounts: supportCompleteness.supportFieldCounts,
     },
   };
 }
@@ -4341,8 +4940,8 @@ function buildDebugReport({
       progressPercent: generationProgress?.percent || 0,
       progressLabel: generationProgress?.label || "",
       translationProvider: translationMeta.provider || "",
-      enrichmentProvider: enrichmentMeta.provider || "",
-      enrichmentModel: enrichmentMeta.model || MODEL_API_CONFIG.enrichmentModel,
+      enrichmentProvider: enrichmentMeta.provider || lesson?.meta?.provider || "",
+      enrichmentModel: enrichmentMeta.model || lesson?.meta?.model || MODEL_API_CONFIG.enrichmentModel,
       enrichmentQualityVersion:
         enrichmentMeta.enrichmentQualityVersion ||
         lesson?.meta?.enrichmentQualityVersion ||
@@ -4361,11 +4960,40 @@ function buildDebugReport({
       enrichmentFailureReason: enrichmentMeta.enrichmentFailureReason || "",
       teachingSupportFallbackUsed: Boolean(enrichmentMeta.teachingSupportFallbackUsed),
       teachingSupportFallbackReason: enrichmentMeta.teachingSupportFallbackReason || "",
+      supportCompletenessPassed: Boolean(
+        enrichmentMeta.supportCompletenessPassed ?? lesson?.meta?.supportCompletenessPassed
+      ),
+      supportCompletenessReasons:
+        enrichmentMeta.supportCompletenessReasons || lesson?.meta?.supportCompletenessReasons || [],
+      missingCriticalSupportFields:
+        enrichmentMeta.missingCriticalSupportFields || lesson?.meta?.missingCriticalSupportFields || [],
+      supportMissingFieldCompletionAttempted: Boolean(
+        enrichmentMeta.supportMissingFieldCompletionAttempted ??
+          lesson?.meta?.supportMissingFieldCompletionAttempted
+      ),
+      supportMissingFieldCompletionSucceeded: Boolean(
+        enrichmentMeta.supportMissingFieldCompletionSucceeded ??
+          lesson?.meta?.supportMissingFieldCompletionSucceeded
+      ),
       supportSource:
         enrichmentMeta.supportSource ||
         lesson?.meta?.supportSource ||
         (enrichmentMeta.enrichmentAttempted ? "online-api" : ""),
       kazakhPromptMode: enrichmentMeta.kazakhPromptMode || lesson?.meta?.kazakhPromptMode || "",
+      kazakhValidationAttempted: Boolean(
+        enrichmentMeta.kazakhValidationAttempted ?? lesson?.meta?.kazakhValidationAttempted
+      ),
+      kazakhValidationPassed: Boolean(
+        enrichmentMeta.kazakhValidationPassed ?? lesson?.meta?.kazakhValidationPassed
+      ),
+      kazakhLanguageValidationPassed: Boolean(
+        enrichmentMeta.kazakhLanguageValidationPassed ?? lesson?.meta?.kazakhLanguageValidationPassed
+      ),
+      kazakhValidationRetryAttempted: Boolean(
+        enrichmentMeta.kazakhValidationRetryAttempted ?? lesson?.meta?.kazakhValidationRetryAttempted
+      ),
+      kazakhValidationReasons:
+        enrichmentMeta.kazakhValidationReasons || lesson?.meta?.kazakhValidationReasons || [],
       lessonTitleWasUserProvided: Boolean(
         enrichmentMeta.lessonTitleWasUserProvided ?? lesson?.meta?.lessonTitleWasUserProvided
       ),
@@ -6260,7 +6888,7 @@ function App() {
             runContext
           );
           assertActiveGenerationRun(runContext);
-          aiLessonBase = normalizeLessonResult(aiPayload, fallbackInput);
+          aiLessonBase = normalizeLessonResult(aiPayload, fallbackInput, combinedTranslation);
           aiLessonMeta = aiLessonBase.meta || aiPayload.meta || aiLessonMeta;
         } catch (lessonErr) {
           if (isGenerationCancelledError(lessonErr)) throw lessonErr;
@@ -6319,8 +6947,14 @@ function App() {
         if (usedFallback) {
           setGenerationStatus("error", t.docxGenerationFallbackUsed(fallbackReason), runContext);
           markGenerationProgressError(runContext);
-        } else if (aiLessonMeta?.teachingSupportFallbackUsed || aiLessonMeta?.enrichmentUsedFallback) {
-          setGenerationStatus("info", t.teachingSupportFallbackUsed, runContext);
+        } else if (aiLessonMeta?.teachingSupportFallbackUsed) {
+          setGenerationStatus(
+            "info",
+            aiLessonMeta?.supportSource === "local-fallback"
+              ? t.teachingSupportFallbackUsed
+              : t.teachingSupportPartiallyGenerated,
+            runContext
+          );
           updateGenerationProgress({
             stage: "done",
             current: 1,
@@ -6447,7 +7081,7 @@ function App() {
           runContext
         );
         assertActiveGenerationRun(runContext);
-        lessonBase = normalizeLessonResult(payload, fallbackInput);
+        lessonBase = normalizeLessonResult(payload, fallbackInput, completedTranslation);
         lessonMeta = lessonBase.meta || payload.meta || lessonMeta;
       } catch (lessonErr) {
         if (isGenerationCancelledError(lessonErr)) throw lessonErr;
@@ -6498,8 +7132,14 @@ function App() {
           runContext
         );
         markGenerationProgressError(runContext);
-      } else if (lessonMeta?.teachingSupportFallbackUsed || lessonMeta?.enrichmentUsedFallback) {
-        setGenerationStatus("info", t.teachingSupportFallbackUsed, runContext);
+      } else if (lessonMeta?.teachingSupportFallbackUsed) {
+        setGenerationStatus(
+          "info",
+          lessonMeta?.supportSource === "local-fallback"
+            ? t.teachingSupportFallbackUsed
+            : t.teachingSupportPartiallyGenerated,
+          runContext
+        );
         updateGenerationProgress({
           stage: "done",
           current: 1,
