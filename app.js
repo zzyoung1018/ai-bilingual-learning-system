@@ -1214,8 +1214,6 @@ function TeacherWorkspace(props) {
     onUpdateLesson,
     onExportTeacherJson,
     onExportStudentJson,
-    onExportTeacherPdf,
-    onExportStudentPdf,
     onExportDocx,
     onExportDebugReport,
     teacherQuizAnswers,
@@ -2503,8 +2501,6 @@ function App() {
             onUpdateLesson=${setTeacherLesson}
             onExportTeacherJson=${exportTeacherJson}
             onExportStudentJson=${exportStudentJson}
-            onExportTeacherPdf=${exportTeacherPdf}
-            onExportStudentPdf=${exportStudentPdf}
             onExportDocx=${exportDocx}
             onExportDebugReport=${exportDebugReport}
             teacherQuizAnswers=${teacherQuizAnswers}
