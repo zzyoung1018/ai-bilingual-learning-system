@@ -640,10 +640,10 @@ function buildLessonEnrichmentMessages({
       {
         role: "system",
         content:
-          "Generate a compact but complete Kazakh teaching-support package. Return ONLY strict JSON. No markdown, comments, or text outside JSON. Do not include a translation field. " +
-          "Use natural Kazakh in Cyrillic script. Do not write Russian. Do not use Latin-script Kazakh for ordinary prose. Preserve English technical terms in parentheses when useful. " +
+          "Generate complete Kazakh teaching-support package. Return ONLY strict JSON. No markdown, comments, or text outside JSON. Do not include a translation field. " +
+          "Use natural Kazakh in Cyrillic script. Do not write Russian. Do not use Latin-script Kazakh. Preserve English technical terms in parentheses when useful. " +
           titleWarning +
-          "Use only the provided source/translation context. Do not invent unrelated topics. Do not use unsupported lesson-title topics in quiz options or examples. " +
+          "Use only the provided source/translation context. Do not invent unrelated topics. Do not use unsupported lesson-title topics in quiz or examples. " +
           "Return all fields in this exact schema: " +
           '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"learningObjectives":["string"],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"differentiatedSupport":{"strugglingLearners":"string","advancedLearners":"string","languageSupport":"string"},"extensionQuestions":["string"],"studentWorksheet":[{"taskTitle":"string","instructions":"string"}],"meta":{}}. ' +
           "Limits: glossary 5, simplifiedExplanation 2-4 short paragraphs, learningObjectives 3, keyConcepts 3, commonMisconceptions 2, teacherNotes 3 short notes, classroomActivities 1, extensionQuestions 2, studentWorksheet 1-2 tasks, quiz respects quiz settings.",
@@ -663,7 +663,7 @@ function buildLessonEnrichmentMessages({
           `${modeHint}\n` +
           `Quiz settings:\n${JSON.stringify(quizSettings, null, 2)}\n\n` +
           `Lesson context:\n${JSON.stringify(context, null, 2)}\n\n` +
-          "Generate complete compact Kazakh JSON. Actual lesson excerpts are the source of truth.",
+          "Generate complete Kazakh JSON. Actual lesson excerpts are the source of truth.",
       },
     ];
   }
@@ -672,25 +672,23 @@ function buildLessonEnrichmentMessages({
     {
       role: "system",
       content:
-        "You are an assistant for an AI-supported bilingual education product. " +
-        "Return ONLY strict JSON. Do not include markdown, comments, or explanatory text outside JSON. " +
-        "No trailing commas. All strings must be properly quoted. Arrays must use commas between elements. " +
-        "Use this exact top-level schema: " +
+        "Generate teaching-support package. Return ONLY strict JSON. No markdown, comments, or text outside JSON. " +
+        "Use this exact schema: " +
         '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"learningObjectives":["string"],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"differentiatedSupport":{"strugglingLearners":"string","advancedLearners":"string","languageSupport":"string"},"extensionQuestions":["string"],"studentWorksheet":[{"taskTitle":"string","instructions":"string"}],"meta":{}}. ' +
-        "This is the teaching-support generation stage, not the translation stage. Do not include a translation field and do not retranslate or rewrite the completed translation. " +
+        "Do not include a translation field. " +
         titleWarning +
-        "Grounding rules: use only the provided lesson context. Do not invent unrelated topics. Do not give generic education advice. Refer to specific concepts, headings, examples, formulas, terminology, or glossary candidates from the context when possible. If the source content is thin, produce fewer and shorter items rather than hallucinating. " +
-        "Glossary rules: choose 5-8 genuinely important terms from the lesson. Avoid trivial words and random terms. Use source term + translated term when useful, and explain each term in concise student-friendly target-language wording. " +
-        "Simplified explanation rules: write a concise 200-400 word explanation when enough content exists. Include a short overview, why the topic matters, step-by-step explanation, one concrete example or analogy when possible, a common difficulty point, and a brief recap. Use line breaks if helpful. " +
-        "Learning objectives must be actionable and measurable, using verbs such as explain, identify, compare, apply, calculate, interpret, or evaluate. Generate 3-5 objectives. " +
-        "Key concepts should have 3-5 lesson-specific concepts with explanations that connect to the lesson context and do not merely repeat the glossary. " +
-        "Common misconceptions should have 2-4 specific misunderstandings and corrections. Teacher notes must cover introduction, likely struggle points, examples to emphasize, prior knowledge, and quick checks for understanding. " +
-        "Classroom activities should have 1-3 executable activities such as a warm-up, pair discussion, quick practice, or exit ticket with clear instructions and realistic durations. Differentiated support must be practical for struggling learners, advanced learners, and language support. " +
-        "Extension questions should have 2-4 open-ended lesson-connected questions. Student worksheet should have 2-4 short actionable tasks, mixing vocabulary check, concept application, short explanation, or reflection. " +
-        "Quiz must follow requested question count, difficulty, and question types, and must be concise and grounded in lesson content. Cover recall, understanding, and application when possible. " +
-        "For multiple_choice, provide exactly 4 options, exactly one clearly correct answer, plausible distractors, and a valid answerIndex. Avoid ambiguous questions. " +
-        "For true_false, provide exactly 2 options in the target language when practical and avoid statements that are too obvious. For short_answer, provide a concise answerText and avoid broad prompts like explain the topic. " +
-        "For long lessons, cover different parts of the context rather than only the beginning.",
+        "Use only the provided lesson context. Do not invent unrelated topics. " +
+        "Glossary: 5-8 important terms with concise explanations. " +
+        "Simplified explanation: 200-400 words covering overview, why it matters, step-by-step explanation, example, common difficulty, recap. " +
+        "Learning objectives: 3-5 actionable objectives using verbs like explain, identify, compare, apply, calculate. " +
+        "Key concepts: 3-5 lesson-specific concepts with explanations. " +
+        "Common misconceptions: 2-4 specific misunderstandings with corrections. " +
+        "Teacher notes: introduction, struggle points, examples to emphasize, prior knowledge, quick checks. " +
+        "Classroom activities: 1-3 executable activities with clear instructions and realistic durations. " +
+        "Differentiated support: practical for struggling learners, advanced learners, and language support. " +
+        "Extension questions: 2-4 open-ended lesson-connected questions. " +
+        "Student worksheet: 2-4 short actionable tasks. " +
+        "Quiz: follow requested settings, be concise and grounded in lesson content. Multiple choice has 4 options with valid answerIndex. True/false has 2 options. Short answer has concise answerText.",
     },
     {
       role: "user",
@@ -701,8 +699,8 @@ function buildLessonEnrichmentMessages({
         `Learning mode: ${mode}\n` +
         `${modeHint}\n` +
         `Quiz settings:\n${JSON.stringify(quizSettings, null, 2)}\n\n` +
-        `Teaching-support context (${context.compact ? "compact representative excerpts" : "full context"}):\n${JSON.stringify(context, null, 2)}\n\n` +
-        "Generate only the requested teaching-support JSON fields and optional meta as valid strict JSON. Do not include translation in the response. Do not use markdown, comments, trailing commas, or unquoted strings.",
+        `Teaching-support context:\n${JSON.stringify(context, null, 2)}\n\n` +
+        "Generate teaching-support JSON. Do not include translation.",
     },
   ];
 }
@@ -1548,8 +1546,23 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
     }
   }
 
+  // Early completeness check: if first attempt succeeded and is complete, skip retries
   const missingCoreFields = getMissingCoreEnrichmentFields(parsed);
-  const shouldRetryForMissingCore = missingCoreFields.length > 0 && !minimalFallbackUsed;
+  let earlyCompletenessCheck = null;
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && missingCoreFields.length === 0) {
+    earlyCompletenessCheck = validateSupportCompleteness(
+      buildNormalizedSupportPreview(parsed, fallbackInput, translation)
+    );
+    if (earlyCompletenessCheck.supportCompletenessPassed) {
+      // First attempt is complete, skip all retries
+      supportCompletenessResult = earlyCompletenessCheck;
+    }
+  }
+
+  const shouldRetryForMissingCore =
+    !earlyCompletenessCheck?.supportCompletenessPassed &&
+    missingCoreFields.length > 0 &&
+    !minimalFallbackUsed;
 
   if (shouldRetryForMissingCore) {
     enrichmentRetryAttempted = true;
@@ -1580,12 +1593,16 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
     }
   }
 
-  supportCompletenessResult = validateSupportCompleteness(
-    buildNormalizedSupportPreview(parsed, fallbackInput, translation)
-  );
+  // Only validate completeness if we haven't already done early check
+  if (!earlyCompletenessCheck) {
+    supportCompletenessResult = validateSupportCompleteness(
+      buildNormalizedSupportPreview(parsed, fallbackInput, translation)
+    );
+  }
 
   const shouldAttemptMissingFieldCompletion =
     !shouldRetryForMissingCore &&
+    !earlyCompletenessCheck?.supportCompletenessPassed &&
     !supportCompletenessResult.supportCompletenessPassed &&
     supportCompletenessResult.missingCompletionFields.length > 0;
 
@@ -1689,9 +1706,13 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
     }
   }
 
-  supportCompletenessResult = validateSupportCompleteness(
-    buildNormalizedSupportPreview(parsed, fallbackInput, translation)
-  );
+  // Only re-validate if we haven't already validated or if Kazakh retry happened
+  if (!supportCompletenessResult.supportCompletenessPassed || kazakhValidationRetryAttempted) {
+    supportCompletenessResult = validateSupportCompleteness(
+      buildNormalizedSupportPreview(parsed, fallbackInput, translation)
+    );
+  }
+
   if (
     enrichmentCompactCompleteRetryAttempted &&
     (!supportMissingFieldCompletionAttempted || kazakhValidationRetryAttempted) &&
