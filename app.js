@@ -840,11 +840,6 @@ function TeacherNotesSection({ title, notes, emptyText }) {
 function LessonSupportSections({ lesson, t, audience = "teacher" }) {
   if (!lesson) return null;
   return html`
-    <${StringListSection}
-      title=${t.learningObjectives}
-      items=${lesson.learningObjectives}
-      emptyText=${t.noLearningObjectivesGenerated}
-    />
     <${KeyConceptSection}
       title=${t.keyConcepts}
       items=${lesson.keyConcepts}
@@ -868,22 +863,11 @@ function LessonSupportSections({ lesson, t, audience = "teacher" }) {
         t=${t}
         emptyText=${t.noClassroomActivitiesGenerated}
       />
-      <${DifferentiatedSupportSection}
-        title=${t.differentiatedSupport}
-        support=${lesson.differentiatedSupport}
-        t=${t}
-        emptyText=${t.noDifferentiatedSupportGenerated}
-      />
     `}
     <${StringListSection}
       title=${t.extensionQuestions}
       items=${lesson.extensionQuestions}
       emptyText=${t.noExtensionQuestionsGenerated}
-    />
-    <${WorksheetSection}
-      title=${t.studentWorksheet}
-      items=${lesson.studentWorksheet}
-      emptyText=${t.noStudentWorksheetGenerated}
     />
   `;
 }
@@ -2373,14 +2357,11 @@ function App() {
         fallbackTranslatedText: teacherLesson.translation || sourceText,
         glossary: teacherLesson.glossary || [],
         simplifiedExplanation: teacherLesson.simplifiedExplanation || "",
-        learningObjectives: teacherLesson.learningObjectives || [],
         keyConcepts: teacherLesson.keyConcepts || [],
         commonMisconceptions: teacherLesson.commonMisconceptions || [],
         teacherNotes: teacherLesson.teacherNotes || "",
         classroomActivities: teacherLesson.classroomActivities || [],
-        differentiatedSupport: teacherLesson.differentiatedSupport || {},
         extensionQuestions: teacherLesson.extensionQuestions || [],
-        studentWorksheet: teacherLesson.studentWorksheet || [],
         quiz: teacherLesson.quiz || [],
         includeAnswerKey: Boolean(quizSettings.includeAnswerKey),
         includeExplanations: Boolean(quizSettings.includeExplanations),

@@ -1,9 +1,21 @@
 import { MODEL_API_CONFIG } from "./api_client.js";
 import { countMatches } from "./block_classifier.js";
+import {
+  ACTIVE_SUPPORT_FIELDS,
+  CRITICAL_SUPPORT_FIELDS,
+  OPTIONAL_SUPPORT_FIELDS,
+  REMOVED_SUPPORT_FIELDS,
+  isActiveSupportField,
+  isCriticalSupportField,
+  isOptionalSupportField,
+  isRemovedSupportField,
+} from "./support_fields.js";
 
-const PIPELINE_VERSION = "phase-4a-online-api-proxy-v1";
+const PIPELINE_VERSION = "phase-5c-removed-fields-v1";
 const TRANSLATION_PROMPT_VERSION = "stage-a-block-translation-v2";
 const CACHE_VERSION = "translation-cache-v3";
+const ENRICHMENT_PROMPT_VERSION = "stage-b-8-fields-v1";
+const ENRICHMENT_QUALITY_VERSION = "phase-5c-8-fields-v1";
 
 const defaultQuizSettings = {
   questionCount: 4,
@@ -100,8 +112,6 @@ async function callModelChat(messages, options, runContext = {}) {
   }
   return runtime.callModelChat(messages, options);
 }
-export const ENRICHMENT_PROMPT_VERSION = "stage-b-teaching-support-v2";
-
 
 const MODEL_ENRICHMENT_OPTIONS = {
   temperature: 0.6,
@@ -111,24 +121,13 @@ const MODEL_ENRICHMENT_OPTIONS = {
   num_predict: 2048,
 };
 
-
 const ENRICHMENT_FULL_CONTEXT_MAX_CHARS = 7000;
 const ENRICHMENT_EXCERPT_MAX_CHARS = 1100;
 const ENRICHMENT_MAX_HEADINGS = 12;
-export const ENRICHMENT_QUALITY_VERSION = "phase4e-grounded-support-v1";
-const SUPPORT_FIELD_NAMES = [
-  "glossary",
-  "simplifiedExplanation",
-  "quiz",
-  "learningObjectives",
-  "keyConcepts",
-  "commonMisconceptions",
-  "teacherNotes",
-  "classroomActivities",
-  "differentiatedSupport",
-  "extensionQuestions",
-  "studentWorksheet",
-];
+
+// SUPPORT_FIELD_NAMES is now imported from support_fields.js as ACTIVE_SUPPORT_FIELDS
+// Kept for backward compatibility in case old code references it
+const SUPPORT_FIELD_NAMES = ACTIVE_SUPPORT_FIELDS;
 
 
 function shuffleOptionsWithAnswer(options, answerIndex) {
@@ -226,11 +225,6 @@ export function createLocalFallbackLesson({
       },
     ],
     simplifiedExplanation: modeText,
-    learningObjectives: [
-      "Identify the main idea of the lesson content.",
-      "Explain key terms using bilingual support.",
-      "Check understanding through short practice tasks.",
-    ],
     keyConcepts: [
       {
         title: "Bilingual access",
@@ -254,20 +248,9 @@ export function createLocalFallbackLesson({
         instructions: "Students compare the source idea and translated explanation with a partner.",
       },
     ],
-    differentiatedSupport: {
-      strugglingLearners: "Pre-teach glossary terms and reduce the reading chunk size.",
-      advancedLearners: "Ask students to extend the explanation with an example.",
-      languageSupport: "Keep important English terms visible next to translated terms.",
-    },
     extensionQuestions: [
       "How could this idea be applied in a new situation?",
       "Which term is most important for understanding the lesson?",
-    ],
-    studentWorksheet: [
-      {
-        taskTitle: "Key idea check",
-        instructions: "Write one sentence explaining the main idea and one key term.",
-      },
     ],
     quizSettings,
     quiz: expanded,
@@ -311,10 +294,25 @@ export function createSafeEnrichmentFallbackLesson(
     compactCompleteRetryAttempted = false,
     minimalFallbackAttempted = false,
     kazakhValidationReasons = [],
+    enrichmentApiCallCount = 0,
+    stageBEnrichmentDurationMs = 0,
   } = {},
   runContext = {}
 ) {
   setActiveEnrichmentRunContext(runContext);
+
+  // Guard: if no API calls were made and generation wasn't cancelled, this is a bug
+  if (enrichmentApiCallCount === 0 && !isGenerationCancelledError(runContext?.cancelledError)) {
+    if (typeof console !== "undefined") {
+      console.error("[Stage B Bug] Local fallback attempted before any online enrichment call.", {
+        reason,
+        retryAttempted,
+        firstAttemptEmpty,
+        firstAttemptInvalid,
+      });
+    }
+  }
+
   const quizSettings = normalizeQuizSettings(fallbackInput.quizSettings);
   const titleGrounding = getLessonTitleGroundingInfo({
     lessonTitle: fallbackInput.lessonTitle,
@@ -328,18 +326,11 @@ export function createSafeEnrichmentFallbackLesson(
     translation: String(translation || "").trim(),
     glossary: [],
     simplifiedExplanation: getSafeEnrichmentFallbackExplanation(fallbackInput.targetLanguage),
-    learningObjectives: [],
     keyConcepts: [],
     commonMisconceptions: [],
     teacherNotes: "",
     classroomActivities: [],
-    differentiatedSupport: {
-      strugglingLearners: "",
-      advancedLearners: "",
-      languageSupport: "",
-    },
     extensionQuestions: [],
-    studentWorksheet: [],
     quizSettings,
     quiz: [],
     mode: fallbackInput.mode,
@@ -351,6 +342,8 @@ export function createSafeEnrichmentFallbackLesson(
       usedFallback: false,
       reason: "",
       enrichmentAttempted: true,
+      enrichmentApiCallCount: enrichmentApiCallCount,
+      stageBEnrichmentDurationMs: stageBEnrichmentDurationMs,
       enrichmentRetryAttempted: Boolean(retryAttempted),
       enrichmentFirstAttemptEmpty: Boolean(firstAttemptEmpty),
       enrichmentFirstAttemptInvalid: Boolean(firstAttemptInvalid),
@@ -645,8 +638,8 @@ function buildLessonEnrichmentMessages({
           titleWarning +
           "Use only the provided source/translation context. Do not invent unrelated topics. Do not use unsupported lesson-title topics in quiz or examples. " +
           "Return all fields in this exact schema: " +
-          '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"learningObjectives":["string"],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"differentiatedSupport":{"strugglingLearners":"string","advancedLearners":"string","languageSupport":"string"},"extensionQuestions":["string"],"studentWorksheet":[{"taskTitle":"string","instructions":"string"}],"meta":{}}. ' +
-          "Limits: glossary 5, simplifiedExplanation 2-4 short paragraphs, learningObjectives 3, keyConcepts 3, commonMisconceptions 2, teacherNotes 3 short notes, classroomActivities 1, extensionQuestions 2, studentWorksheet 1-2 tasks, quiz respects quiz settings.",
+          '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"extensionQuestions":["string"],"meta":{}}. ' +
+          "Limits: glossary 5, simplifiedExplanation 2-4 short paragraphs, keyConcepts 3, commonMisconceptions 2, teacherNotes 3 short notes, classroomActivities 1, extensionQuestions 2, quiz respects quiz settings.",
       },
       {
         role: "user",
@@ -674,20 +667,17 @@ function buildLessonEnrichmentMessages({
       content:
         "Generate teaching-support package. Return ONLY strict JSON. No markdown, comments, or text outside JSON. " +
         "Use this exact schema: " +
-        '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"learningObjectives":["string"],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"differentiatedSupport":{"strugglingLearners":"string","advancedLearners":"string","languageSupport":"string"},"extensionQuestions":["string"],"studentWorksheet":[{"taskTitle":"string","instructions":"string"}],"meta":{}}. ' +
+        '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"extensionQuestions":["string"],"meta":{}}. ' +
         "Do not include a translation field. " +
         titleWarning +
         "Use only the provided lesson context. Do not invent unrelated topics. " +
         "Glossary: 5-8 important terms with concise explanations. " +
         "Simplified explanation: 200-400 words covering overview, why it matters, step-by-step explanation, example, common difficulty, recap. " +
-        "Learning objectives: 3-5 actionable objectives using verbs like explain, identify, compare, apply, calculate. " +
         "Key concepts: 3-5 lesson-specific concepts with explanations. " +
         "Common misconceptions: 2-4 specific misunderstandings with corrections. " +
         "Teacher notes: introduction, struggle points, examples to emphasize, prior knowledge, quick checks. " +
         "Classroom activities: 1-3 executable activities with clear instructions and realistic durations. " +
-        "Differentiated support: practical for struggling learners, advanced learners, and language support. " +
         "Extension questions: 2-4 open-ended lesson-connected questions. " +
-        "Student worksheet: 2-4 short actionable tasks. " +
         "Quiz: follow requested settings, be concise and grounded in lesson content. Multiple choice has 4 options with valid answerIndex. True/false has 2 options. Short answer has concise answerText.",
     },
     {
@@ -736,8 +726,8 @@ function buildMinimalLessonEnrichmentMessages({
         "Return ONLY valid strict JSON. No markdown, comments, trailing commas, or text outside JSON. " +
         "Use only the provided lesson context and avoid generic filler or unrelated topics. " +
         "Do not include a translation field. Use only these top-level fields: " +
-        '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"learningObjectives":["string"],"keyConcepts":[{"title":"string","explanation":"string"}],"meta":{}}. ' +
-        "Keep output small and lesson-specific: glossary 3-5 important terms, learningObjectives 3 measurable items, keyConcepts 3 items, simplifiedExplanation short but useful, and quiz concise.",
+        '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"keyConcepts":[{"title":"string","explanation":"string"}],"meta":{}}. ' +
+        "Keep output small and lesson-specific: glossary 3-5 important terms, keyConcepts 3 items, simplifiedExplanation short but useful, and quiz concise.",
     },
     {
       role: "user",
@@ -780,9 +770,11 @@ function buildMissingSupportCompletionMessages({
   const languageInstruction = getEnrichmentLanguageInstruction(targetLanguage);
   const fieldList = (Array.isArray(missingFields) ? missingFields : [])
     .map((field) => String(field || "").trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((field) => isActiveSupportField(field)); // Only request active fields
+
   const allowedSchema =
-    '{"glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"learningObjectives":["string"],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"differentiatedSupport":{"strugglingLearners":"string","advancedLearners":"string","languageSupport":"string"},"extensionQuestions":["string"],"studentWorksheet":[{"taskTitle":"string","instructions":"string"}],"meta":{}}';
+    '{"glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"extensionQuestions":["string"],"meta":{}}';
 
   if (targetLanguage === "Kazakh") {
     return [
@@ -794,7 +786,7 @@ function buildMissingSupportCompletionMessages({
           "Use natural Kazakh Cyrillic. Do not write Russian. Do not use Latin-script Kazakh for ordinary prose. Preserve English technical terms in parentheses only when useful. " +
           "Use source and translation excerpts as ground truth. The lesson title is metadata only; do not use it as the only source. Do not invent title-only topics. " +
           `Allowed JSON shape: ${allowedSchema}. ` +
-          "Kazakh field targets when requested: glossary 3-5 entries, quiz 3-4 questions, learningObjectives 2-3, keyConcepts 2-3, commonMisconceptions 1-2, teacherNotes 2-3, classroomActivities 1, differentiatedSupport with at least one useful non-empty field, extensionQuestions 1-2, simplifiedExplanation 1-2 short paragraphs, studentWorksheet 1-2 tasks.",
+          "Kazakh field targets when requested: glossary 3-5 entries, quiz 3-4 questions, keyConcepts 2-3, commonMisconceptions 1-2, teacherNotes 2-3, classroomActivities 1, extensionQuestions 1-2, simplifiedExplanation 1-2 short paragraphs.",
       },
       {
         role: "user",
@@ -876,9 +868,9 @@ function buildCompactRichLessonEnrichmentMessages({
           "Do not write Russian. Do not use Latin-script Kazakh. " +
           "For well-known English proper nouns, use common Kazakh transliteration with English in parentheses when useful. " +
           titleWarning +
-          "Use source and translation excerpts as the source of truth. Do not generate quiz, glossary, objectives, examples, or worksheet tasks from title-only topics. Do not return the full translation. " +
-          "Return every schema field: lessonTitle, glossary, simplifiedExplanation, quiz, learningObjectives, keyConcepts, commonMisconceptions, teacherNotes, classroomActivities, differentiatedSupport, extensionQuestions, studentWorksheet, meta. " +
-          "Keep it short: glossary exactly 5, simplifiedExplanation exactly 2 short paragraphs, quiz 3-4 questions, learningObjectives exactly 3, keyConcepts exactly 3, commonMisconceptions exactly 2, teacherNotes 2-3 short notes, classroomActivities exactly 1, differentiatedSupport includes strugglingLearners, advancedLearners, and languageSupport, extensionQuestions exactly 2, studentWorksheet 1-2 tasks. Quiz follows settings and must be about the actual lesson context.",
+          "Use source and translation excerpts as the source of truth. Do not generate quiz, glossary, examples from title-only topics. Do not return the full translation. " +
+          "Return every schema field: lessonTitle, glossary, simplifiedExplanation, quiz, keyConcepts, commonMisconceptions, teacherNotes, classroomActivities, extensionQuestions, meta. " +
+          "Keep it short: glossary exactly 5, simplifiedExplanation exactly 2 short paragraphs, quiz 3-4 questions, keyConcepts exactly 3, commonMisconceptions exactly 2, teacherNotes 2-3 short notes, classroomActivities exactly 1, extensionQuestions exactly 2. Quiz follows settings and must be about the actual lesson context.",
       },
       {
         role: "user",
@@ -904,8 +896,8 @@ function buildCompactRichLessonEnrichmentMessages({
         "Use only the provided lesson context. Do not invent unrelated topics or generic filler. Do not include a translation field. " +
         titleWarning +
         "Return all top-level fields in this schema, even when a field must be empty: " +
-        '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"learningObjectives":["string"],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"differentiatedSupport":{"strugglingLearners":"string","advancedLearners":"string","languageSupport":"string"},"extensionQuestions":["string"],"studentWorksheet":[{"taskTitle":"string","instructions":"string"}],"meta":{}}. ' +
-        "Limits: glossary 5 entries, learningObjectives 3, keyConcepts 3, commonMisconceptions 2, classroomActivities 1, extensionQuestions 2, studentWorksheet 1-2 tasks. Quiz must respect quiz settings.",
+        '{"lessonTitle":"string","glossary":[{"term":"string","explanation":"string"}],"simplifiedExplanation":"string","quiz":[{"type":"multiple_choice|true_false|short_answer","question":"string","options":["string"],"answerIndex":0,"answerText":"string","explanation":"string"}],"keyConcepts":[{"title":"string","explanation":"string"}],"commonMisconceptions":[{"misconception":"string","correction":"string"}],"teacherNotes":["string"],"classroomActivities":[{"title":"string","duration":"string","instructions":"string"}],"extensionQuestions":["string"],"meta":{}}. ' +
+        "Limits: glossary 5 entries, keyConcepts 3, commonMisconceptions 2, classroomActivities 1, extensionQuestions 2. Quiz must respect quiz settings.",
     },
     {
       role: "user",
@@ -929,7 +921,7 @@ function buildEnrichmentJsonRepairMessages(malformedJson) {
         "You repair malformed JSON for an education app. Return ONLY valid strict JSON. " +
         "Do not use markdown, comments, or explanatory text. Do not add a translation field. " +
         "No trailing commas. All strings must be properly quoted. Arrays must use commas between elements. " +
-        "Preserve the semantic content if possible. The allowed top-level fields are lessonTitle, glossary, simplifiedExplanation, quiz, learningObjectives, keyConcepts, commonMisconceptions, teacherNotes, classroomActivities, differentiatedSupport, extensionQuestions, studentWorksheet, and meta.",
+        "Preserve the semantic content if possible. The allowed top-level fields are lessonTitle, glossary, simplifiedExplanation, quiz, keyConcepts, commonMisconceptions, teacherNotes, classroomActivities, extensionQuestions, and meta.",
     },
     {
       role: "user",
@@ -1029,19 +1021,8 @@ function mergeEnrichmentPayloads(primary, supplemental) {
   if (!supplemental || typeof supplemental !== "object" || Array.isArray(supplemental)) {
     return result;
   }
-  [
-    "lessonTitle",
-    "glossary",
-    "simplifiedExplanation",
-    "quiz",
-    "learningObjectives",
-    "keyConcepts",
-    "commonMisconceptions",
-    "teacherNotes",
-    "classroomActivities",
-    "extensionQuestions",
-    "studentWorksheet",
-  ].forEach((field) => {
+  // Only merge active support fields
+  ["lessonTitle", ...ACTIVE_SUPPORT_FIELDS].forEach((field) => {
     if (!hasSupportValue(result[field]) && hasSupportValue(supplemental[field])) {
       result[field] = supplemental[field];
     }
@@ -1306,9 +1287,7 @@ export function getSupportCompletenessIssues(lessonLike) {
     commonMisconceptions: 1,
     teacherNotes: 1,
     classroomActivities: 1,
-    differentiatedSupport: 1,
     extensionQuestions: 1,
-    studentWorksheet: 1,
   };
   if (isTeacherMode) {
     Object.entries(teacherMinimums).forEach(([field, minimum]) => {
@@ -1319,10 +1298,9 @@ export function getSupportCompletenessIssues(lessonLike) {
   } else {
     const hasPracticalSupport =
       Number(counts.teacherNotes || 0) > 0 ||
-      Number(counts.classroomActivities || 0) > 0 ||
-      Number(counts.studentWorksheet || 0) > 0;
+      Number(counts.classroomActivities || 0) > 0;
     if (isKazakh && !hasPracticalSupport) {
-      addMissing("studentWorksheet", "optional", "kazakh_practical_support_empty");
+      addMissing("teacherNotes", "optional", "kazakh_practical_support_empty");
     }
   }
 
@@ -1336,18 +1314,6 @@ export function getSupportCompletenessIssues(lessonLike) {
     ["title", "duration", "instructions"]
   );
   if (activityIssues.length > 0) addIncomplete("classroomActivities", activityIssues);
-  const worksheetIssues = getIncompleteObjectArrayFields(lessonLike?.studentWorksheet, ["taskTitle", "instructions"]);
-  if (worksheetIssues.length > 0) addIncomplete("studentWorksheet", worksheetIssues);
-  const differentiatedSupport = lessonLike?.differentiatedSupport || {};
-  if (
-    differentiatedSupport &&
-    typeof differentiatedSupport === "object" &&
-    !Object.values(differentiatedSupport).some((item) => Boolean(String(item || "").trim()))
-  ) {
-    addIncomplete("differentiatedSupport", [
-      { missing: ["strugglingLearners", "advancedLearners", "languageSupport"] },
-    ]);
-  }
 
   return {
     missingCriticalFields: Array.from(new Set(missingCriticalFields)),
@@ -1390,17 +1356,12 @@ function mergeMissingSupportFields(primary, supplemental, fields) {
   const patch = supplemental && typeof supplemental === "object" && !Array.isArray(supplemental)
     ? supplemental
     : {};
-  (Array.isArray(fields) ? fields : []).forEach((field) => {
-    if (!field || !hasSupportValue(patch[field])) return;
-    if (field === "differentiatedSupport") {
-      result.differentiatedSupport = {
-        ...(result.differentiatedSupport || {}),
-        ...(patch.differentiatedSupport || {}),
-      };
-      return;
-    }
-    result[field] = patch[field];
-  });
+  (Array.isArray(fields) ? fields : [])
+    .filter((field) => isActiveSupportField(field)) // Only merge active fields
+    .forEach((field) => {
+      if (!field || !hasSupportValue(patch[field])) return;
+      result[field] = patch[field];
+    });
   result.meta = {
     ...(result.meta || {}),
     ...(patch.meta || {}),
@@ -1411,15 +1372,40 @@ function mergeMissingSupportFields(primary, supplemental, fields) {
 export async function generateTeachingSupportWithModel(fallbackInput, translation, runContext = null) {
   setActiveEnrichmentRunContext(runContext || {});
   throwIfGenerationCancelled(runContext);
-  const titleGrounding = getLessonTitleGroundingInfo({
-    lessonTitle: fallbackInput.lessonTitle,
-    sourceText: fallbackInput.sourceText,
-    translation,
-  });
-  const messages = buildLessonEnrichmentMessages({
-    ...fallbackInput,
-    translation,
-  });
+
+  const enrichmentStartedAt = Date.now();
+  const metrics = {
+    apiCallCount: 0,
+    enrichmentFirstAttemptDurationMs: 0,
+    enrichmentCompactRetryDurationMs: 0,
+    missingFieldCompletionDurationMs: 0,
+  };
+  if (runContext) runContext.enrichmentMetrics = metrics;
+
+  let titleGrounding;
+  let messages;
+
+  try {
+    titleGrounding = getLessonTitleGroundingInfo({
+      lessonTitle: fallbackInput.lessonTitle,
+      sourceText: fallbackInput.sourceText,
+      translation,
+    });
+    messages = buildLessonEnrichmentMessages({
+      ...fallbackInput,
+      translation,
+    });
+  } catch (setupErr) {
+    // If message building fails, return fallback with clear error
+    if (isGenerationCancelledError(setupErr)) throw setupErr;
+    return createSafeEnrichmentFallbackLesson(fallbackInput, translation, {
+      reason: `enrichment_setup_failed:${setupErr?.message || "unknown"}`,
+      retryAttempted: false,
+      enrichmentApiCallCount: 0,
+      stageBEnrichmentDurationMs: Date.now() - enrichmentStartedAt,
+    }, runContext);
+  }
+
   let parsed;
   let malformedContent = "";
   let enrichmentRetryAttempted = false;
@@ -1442,14 +1428,7 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
   let supportMissingFieldCompletionAttempted = false;
   let supportMissingFieldCompletionSucceeded = false;
   let supportMissingFieldCompletionFields = [];
-  const enrichmentStartedAt = Date.now();
-  const metrics = {
-    apiCallCount: 0,
-    enrichmentFirstAttemptDurationMs: 0,
-    enrichmentCompactRetryDurationMs: 0,
-    missingFieldCompletionDurationMs: 0,
-  };
-  if (runContext) runContext.enrichmentMetrics = metrics;
+
   async function timedRequestParsedEnrichment(messagesForRequest, durationKey) {
     const startedAt = Date.now();
     try {
@@ -1542,6 +1521,8 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
         richRetryAttempted: enrichmentRichRetryAttempted,
         compactCompleteRetryAttempted: enrichmentCompactCompleteRetryAttempted,
         minimalFallbackAttempted: enrichmentMinimalFallbackAttempted,
+        enrichmentApiCallCount: metrics.apiCallCount,
+        stageBEnrichmentDurationMs: Date.now() - enrichmentStartedAt,
       });
     }
   }
@@ -1589,6 +1570,8 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
         richRetryAttempted: enrichmentRichRetryAttempted,
         compactCompleteRetryAttempted: enrichmentCompactCompleteRetryAttempted,
         minimalFallbackAttempted: enrichmentMinimalFallbackAttempted,
+        enrichmentApiCallCount: metrics.apiCallCount,
+        stageBEnrichmentDurationMs: Date.now() - enrichmentStartedAt,
       });
     }
   }
@@ -1687,6 +1670,8 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
             compactCompleteRetryAttempted: enrichmentCompactCompleteRetryAttempted,
             minimalFallbackAttempted: enrichmentMinimalFallbackAttempted,
             kazakhValidationReasons: kazakhValidationResult.reasons,
+            enrichmentApiCallCount: metrics.apiCallCount,
+            stageBEnrichmentDurationMs: Date.now() - enrichmentStartedAt,
           });
         }
       } catch (retryErr) {
@@ -1701,6 +1686,8 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
           compactCompleteRetryAttempted: enrichmentCompactCompleteRetryAttempted,
           minimalFallbackAttempted: enrichmentMinimalFallbackAttempted,
           kazakhValidationReasons: kazakhValidationResult.reasons,
+          enrichmentApiCallCount: metrics.apiCallCount,
+          stageBEnrichmentDurationMs: Date.now() - enrichmentStartedAt,
         });
       }
     }
@@ -1984,17 +1971,6 @@ function getSupportIncompleteFields(lessonLike) {
   ) {
     incomplete.push("classroomActivities");
   }
-  if (getIncompleteObjectArrayFields(lessonLike?.studentWorksheet, ["taskTitle", "instructions"]).length > 0) {
-    incomplete.push("studentWorksheet");
-  }
-  const differentiatedSupport = lessonLike?.differentiatedSupport || {};
-  if (
-    differentiatedSupport &&
-    typeof differentiatedSupport === "object" &&
-    !Object.values(differentiatedSupport).some((item) => Boolean(String(item || "").trim()))
-  ) {
-    incomplete.push("differentiatedSupport");
-  }
   return Array.from(new Set(incomplete));
 }
 
@@ -2131,6 +2107,8 @@ export function normalizeLessonResult(raw, fallbackInput, fallbackTranslation = 
       return createSafeEnrichmentFallbackLesson(fallbackInput, fallbackTranslation, {
         reason: "enrichment_normalization_invalid_payload",
         retryAttempted: true,
+        enrichmentApiCallCount: raw?.meta?.enrichmentApiCallCount || 0,
+        stageBEnrichmentDurationMs: raw?.meta?.stageBEnrichmentDurationMs || 0,
       });
     }
     return createLocalFallbackLesson(fallbackInput);
@@ -2190,6 +2168,8 @@ export function normalizeLessonResult(raw, fallbackInput, fallbackTranslation = 
     return createSafeEnrichmentFallbackLesson(fallbackInput, translation, {
       reason: "enrichment_normalization_missing_core_support",
       retryAttempted: true,
+      enrichmentApiCallCount: raw?.meta?.enrichmentApiCallCount || 0,
+      stageBEnrichmentDurationMs: raw?.meta?.stageBEnrichmentDurationMs || 0,
     });
   }
 

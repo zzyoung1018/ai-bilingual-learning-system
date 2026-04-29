@@ -1148,14 +1148,11 @@ async function appendLearningSupportSection({
   targetLanguage,
   glossary,
   simplifiedExplanation,
-  learningObjectives,
   keyConcepts,
   commonMisconceptions,
   teacherNotes,
   classroomActivities,
-  differentiatedSupport,
   extensionQuestions,
-  studentWorksheet,
   quiz,
   includeAnswerKey,
   includeExplanations,
@@ -1226,18 +1223,9 @@ async function appendLearningSupportSection({
     body.appendChild(createParagraph(""));
   }
 
-  // 3. Learning Objectives
-  if (Array.isArray(learningObjectives) && learningObjectives.length > 0) {
-    body.appendChild(createParagraph("3. Learning Objectives", true));
-    learningObjectives.forEach((obj, idx) => {
-      body.appendChild(createParagraph(`   ${idx + 1}. ${normalizeText(obj)}`));
-    });
-    body.appendChild(createParagraph(""));
-  }
-
-  // 4. Key Concepts
+  // 3. Key Concepts
   if (Array.isArray(keyConcepts) && keyConcepts.length > 0) {
-    body.appendChild(createParagraph("4. Key Concepts", true));
+    body.appendChild(createParagraph("3. Key Concepts", true));
     keyConcepts.forEach((concept) => {
       body.appendChild(createParagraph(`   • ${normalizeText(concept.title || "")}`));
       if (concept.explanation) {
@@ -1247,9 +1235,9 @@ async function appendLearningSupportSection({
     body.appendChild(createParagraph(""));
   }
 
-  // 5. Common Misconceptions
+  // 4. Common Misconceptions
   if (Array.isArray(commonMisconceptions) && commonMisconceptions.length > 0) {
-    body.appendChild(createParagraph("5. Common Misconceptions", true));
+    body.appendChild(createParagraph("4. Common Misconceptions", true));
     commonMisconceptions.forEach((item) => {
       body.appendChild(createParagraph(`   Misconception: ${normalizeText(item.misconception || "")}`));
       body.appendChild(createParagraph(`   Correction: ${normalizeText(item.correction || "")}`));
@@ -1257,9 +1245,9 @@ async function appendLearningSupportSection({
     });
   }
 
-  // 6. Teacher Notes
+  // 5. Teacher Notes
   if (teacherNotes) {
-    body.appendChild(createParagraph("6. Teacher Notes", true));
+    body.appendChild(createParagraph("5. Teacher Notes", true));
     if (Array.isArray(teacherNotes)) {
       teacherNotes.forEach((note) => {
         body.appendChild(createParagraph(`   • ${normalizeText(note)}`));
@@ -1275,9 +1263,9 @@ async function appendLearningSupportSection({
     body.appendChild(createParagraph(""));
   }
 
-  // 7. Classroom Activities
+  // 6. Classroom Activities
   if (Array.isArray(classroomActivities) && classroomActivities.length > 0) {
-    body.appendChild(createParagraph("7. Classroom Activities", true));
+    body.appendChild(createParagraph("6. Classroom Activities", true));
     classroomActivities.forEach((activity, idx) => {
       body.appendChild(createParagraph(`   Activity ${idx + 1}: ${normalizeText(activity.title || "")}`));
       if (activity.duration) {
@@ -1290,16 +1278,7 @@ async function appendLearningSupportSection({
     });
   }
 
-  // 8. Differentiated Support
-  if (differentiatedSupport && typeof differentiatedSupport === "object") {
-    const hasContent =
-      differentiatedSupport.strugglingLearners ||
-      differentiatedSupport.advancedLearners ||
-      differentiatedSupport.languageSupport;
-
-    if (hasContent) {
-      body.appendChild(createParagraph("8. Differentiated Support", true));
-      if (differentiatedSupport.strugglingLearners) {
+  // 7. Extension Questions
         body.appendChild(createParagraph("   Struggling Learners:", true));
         body.appendChild(createParagraph(`   ${normalizeText(differentiatedSupport.strugglingLearners)}`));
         body.appendChild(createParagraph(""));
@@ -1317,30 +1296,18 @@ async function appendLearningSupportSection({
     }
   }
 
-  // 9. Extension Questions
+  // 7. Extension Questions
   if (Array.isArray(extensionQuestions) && extensionQuestions.length > 0) {
-    body.appendChild(createParagraph("9. Extension Questions", true));
+    body.appendChild(createParagraph("7. Extension Questions", true));
     extensionQuestions.forEach((question, idx) => {
       body.appendChild(createParagraph(`   ${idx + 1}. ${normalizeText(question)}`));
     });
     body.appendChild(createParagraph(""));
   }
 
-  // 10. Student Worksheet
-  if (Array.isArray(studentWorksheet) && studentWorksheet.length > 0) {
-    body.appendChild(createParagraph("10. Student Worksheet", true));
-    studentWorksheet.forEach((task, idx) => {
-      body.appendChild(createParagraph(`   Task ${idx + 1}: ${normalizeText(task.taskTitle || "")}`));
-      if (task.instructions) {
-        body.appendChild(createParagraph(`   ${normalizeText(task.instructions)}`));
-      }
-      body.appendChild(createParagraph(""));
-    });
-  }
-
-  // 11. Quiz
+  // 8. Practice Quiz
   if (Array.isArray(quiz) && quiz.length > 0) {
-    body.appendChild(createParagraph("11. Practice Quiz", true));
+    body.appendChild(createParagraph("8. Practice Quiz", true));
     quiz.forEach((q, idx) => {
       body.appendChild(createParagraph(`${idx + 1}. ${normalizeText(q.question)}`));
 
@@ -1396,14 +1363,11 @@ export async function exportTranslatedDocx({
   fallbackTranslatedText,
   glossary,
   simplifiedExplanation,
-  learningObjectives,
   keyConcepts,
   commonMisconceptions,
   teacherNotes,
   classroomActivities,
-  differentiatedSupport,
   extensionQuestions,
-  studentWorksheet,
   quiz,
   includeAnswerKey = false,
   includeExplanations = false,
@@ -1514,14 +1478,11 @@ export async function exportTranslatedDocx({
       targetLanguage,
       glossary,
       simplifiedExplanation,
-      learningObjectives,
       keyConcepts,
       commonMisconceptions,
       teacherNotes,
       classroomActivities,
-      differentiatedSupport,
       extensionQuestions,
-      studentWorksheet,
       quiz,
       includeAnswerKey,
       includeExplanations,
