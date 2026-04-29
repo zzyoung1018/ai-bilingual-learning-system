@@ -1148,8 +1148,17 @@ async function appendLearningSupportSection({
   targetLanguage,
   glossary,
   simplifiedExplanation,
+  learningObjectives,
+  keyConcepts,
+  commonMisconceptions,
+  teacherNotes,
+  classroomActivities,
+  differentiatedSupport,
+  extensionQuestions,
+  studentWorksheet,
   quiz,
   includeAnswerKey,
+  includeExplanations,
 }) {
   const fileEntry = zip.file("word/document.xml");
   if (!fileEntry) return;
@@ -1159,10 +1168,17 @@ async function appendLearningSupportSection({
   const body = xmlDoc.getElementsByTagNameNS(WORD_NS, "body")[0];
   if (!body) return;
 
-  function createParagraph(text, isBold = false) {
+  function createParagraph(text, isBold = false, isHeading = false) {
     const p = xmlDoc.createElementNS(WORD_NS, "w:p");
+    if (isHeading) {
+      const pPr = xmlDoc.createElementNS(WORD_NS, "w:pPr");
+      const pStyle = xmlDoc.createElementNS(WORD_NS, "w:pStyle");
+      pStyle.setAttributeNS(WORD_NS, "w:val", "Heading2");
+      pPr.appendChild(pStyle);
+      p.appendChild(pPr);
+    }
     const r = xmlDoc.createElementNS(WORD_NS, "w:r");
-    if (isBold) {
+    if (isBold && !isHeading) {
       const rPr = xmlDoc.createElementNS(WORD_NS, "w:rPr");
       const b = xmlDoc.createElementNS(WORD_NS, "w:b");
       rPr.appendChild(b);
@@ -1179,34 +1195,167 @@ async function appendLearningSupportSection({
     return p;
   }
 
+  // Page break and title
   body.appendChild(createParagraph(""));
-  body.appendChild(createParagraph(`Learning Support Appendix: ${lessonTitle || "Lesson"}`, true));
-  body.appendChild(createParagraph(`Target language: ${targetLanguage || "N/A"}`));
+  body.appendChild(createParagraph(""));
+  body.appendChild(createParagraph("Teaching Support", true, true));
+  body.appendChild(createParagraph(`Lesson: ${lessonTitle || "Untitled"}`));
+  body.appendChild(createParagraph(`Target Language: ${targetLanguage || "N/A"}`));
+  body.appendChild(createParagraph(""));
 
+  // 1. Glossary
   if (Array.isArray(glossary) && glossary.length > 0) {
-    body.appendChild(createParagraph("Glossary", true));
+    body.appendChild(createParagraph("1. Glossary", true));
     glossary.forEach((item) => {
       body.appendChild(
-        createParagraph(`${normalizeText(item.term)}: ${normalizeText(item.explanation)}`)
+        createParagraph(`   • ${normalizeText(item.term)}: ${normalizeText(item.explanation)}`)
       );
+    });
+    body.appendChild(createParagraph(""));
+  }
+
+  // 2. Simplified Explanation
+  if (simplifiedExplanation) {
+    body.appendChild(createParagraph("2. Simplified Explanation", true));
+    const paragraphs = String(simplifiedExplanation).split(/\n+/);
+    paragraphs.forEach((para) => {
+      if (para.trim()) {
+        body.appendChild(createParagraph(`   ${para.trim()}`));
+      }
+    });
+    body.appendChild(createParagraph(""));
+  }
+
+  // 3. Learning Objectives
+  if (Array.isArray(learningObjectives) && learningObjectives.length > 0) {
+    body.appendChild(createParagraph("3. Learning Objectives", true));
+    learningObjectives.forEach((obj, idx) => {
+      body.appendChild(createParagraph(`   ${idx + 1}. ${normalizeText(obj)}`));
+    });
+    body.appendChild(createParagraph(""));
+  }
+
+  // 4. Key Concepts
+  if (Array.isArray(keyConcepts) && keyConcepts.length > 0) {
+    body.appendChild(createParagraph("4. Key Concepts", true));
+    keyConcepts.forEach((concept) => {
+      body.appendChild(createParagraph(`   • ${normalizeText(concept.title || "")}`));
+      if (concept.explanation) {
+        body.appendChild(createParagraph(`     ${normalizeText(concept.explanation)}`));
+      }
+    });
+    body.appendChild(createParagraph(""));
+  }
+
+  // 5. Common Misconceptions
+  if (Array.isArray(commonMisconceptions) && commonMisconceptions.length > 0) {
+    body.appendChild(createParagraph("5. Common Misconceptions", true));
+    commonMisconceptions.forEach((item) => {
+      body.appendChild(createParagraph(`   Misconception: ${normalizeText(item.misconception || "")}`));
+      body.appendChild(createParagraph(`   Correction: ${normalizeText(item.correction || "")}`));
+      body.appendChild(createParagraph(""));
     });
   }
 
-  if (simplifiedExplanation) {
-    body.appendChild(createParagraph("Simplified Explanation", true));
-    body.appendChild(createParagraph(simplifiedExplanation));
+  // 6. Teacher Notes
+  if (teacherNotes) {
+    body.appendChild(createParagraph("6. Teacher Notes", true));
+    if (Array.isArray(teacherNotes)) {
+      teacherNotes.forEach((note) => {
+        body.appendChild(createParagraph(`   • ${normalizeText(note)}`));
+      });
+    } else {
+      const paragraphs = String(teacherNotes).split(/\n+/);
+      paragraphs.forEach((para) => {
+        if (para.trim()) {
+          body.appendChild(createParagraph(`   ${para.trim()}`));
+        }
+      });
+    }
+    body.appendChild(createParagraph(""));
   }
 
+  // 7. Classroom Activities
+  if (Array.isArray(classroomActivities) && classroomActivities.length > 0) {
+    body.appendChild(createParagraph("7. Classroom Activities", true));
+    classroomActivities.forEach((activity, idx) => {
+      body.appendChild(createParagraph(`   Activity ${idx + 1}: ${normalizeText(activity.title || "")}`));
+      if (activity.duration) {
+        body.appendChild(createParagraph(`   Duration: ${normalizeText(activity.duration)}`));
+      }
+      if (activity.instructions) {
+        body.appendChild(createParagraph(`   Instructions: ${normalizeText(activity.instructions)}`));
+      }
+      body.appendChild(createParagraph(""));
+    });
+  }
+
+  // 8. Differentiated Support
+  if (differentiatedSupport && typeof differentiatedSupport === "object") {
+    const hasContent =
+      differentiatedSupport.strugglingLearners ||
+      differentiatedSupport.advancedLearners ||
+      differentiatedSupport.languageSupport;
+
+    if (hasContent) {
+      body.appendChild(createParagraph("8. Differentiated Support", true));
+      if (differentiatedSupport.strugglingLearners) {
+        body.appendChild(createParagraph("   Struggling Learners:", true));
+        body.appendChild(createParagraph(`   ${normalizeText(differentiatedSupport.strugglingLearners)}`));
+        body.appendChild(createParagraph(""));
+      }
+      if (differentiatedSupport.advancedLearners) {
+        body.appendChild(createParagraph("   Advanced Learners:", true));
+        body.appendChild(createParagraph(`   ${normalizeText(differentiatedSupport.advancedLearners)}`));
+        body.appendChild(createParagraph(""));
+      }
+      if (differentiatedSupport.languageSupport) {
+        body.appendChild(createParagraph("   Language Support:", true));
+        body.appendChild(createParagraph(`   ${normalizeText(differentiatedSupport.languageSupport)}`));
+        body.appendChild(createParagraph(""));
+      }
+    }
+  }
+
+  // 9. Extension Questions
+  if (Array.isArray(extensionQuestions) && extensionQuestions.length > 0) {
+    body.appendChild(createParagraph("9. Extension Questions", true));
+    extensionQuestions.forEach((question, idx) => {
+      body.appendChild(createParagraph(`   ${idx + 1}. ${normalizeText(question)}`));
+    });
+    body.appendChild(createParagraph(""));
+  }
+
+  // 10. Student Worksheet
+  if (Array.isArray(studentWorksheet) && studentWorksheet.length > 0) {
+    body.appendChild(createParagraph("10. Student Worksheet", true));
+    studentWorksheet.forEach((task, idx) => {
+      body.appendChild(createParagraph(`   Task ${idx + 1}: ${normalizeText(task.taskTitle || "")}`));
+      if (task.instructions) {
+        body.appendChild(createParagraph(`   ${normalizeText(task.instructions)}`));
+      }
+      body.appendChild(createParagraph(""));
+    });
+  }
+
+  // 11. Quiz
   if (Array.isArray(quiz) && quiz.length > 0) {
-    body.appendChild(createParagraph("Quiz", true));
+    body.appendChild(createParagraph("11. Practice Quiz", true));
     quiz.forEach((q, idx) => {
       body.appendChild(createParagraph(`${idx + 1}. ${normalizeText(q.question)}`));
-      if (Array.isArray(q.options)) {
+
+      if (q.type === "multiple_choice" && Array.isArray(q.options)) {
+        q.options.forEach((option, optionIdx) => {
+          const letter = String.fromCharCode(65 + optionIdx);
+          body.appendChild(createParagraph(`   ${letter}. ${normalizeText(option)}`));
+        });
+      } else if (q.type === "true_false" && Array.isArray(q.options)) {
         q.options.forEach((option, optionIdx) => {
           const letter = String.fromCharCode(65 + optionIdx);
           body.appendChild(createParagraph(`   ${letter}. ${normalizeText(option)}`));
         });
       }
+
       if (includeAnswerKey) {
         const answer =
           q.type === "short_answer"
@@ -1217,11 +1366,22 @@ async function appendLearningSupportSection({
                   : ""
               );
         if (answer) {
-          body.appendChild(createParagraph(`   Answer: ${answer}`));
+          body.appendChild(createParagraph(`   Answer: ${answer}`, true));
         }
       }
+
+      if (includeExplanations && q.explanation) {
+        body.appendChild(createParagraph(`   Explanation: ${normalizeText(q.explanation)}`));
+      }
+
+      body.appendChild(createParagraph(""));
     });
   }
+
+  const serializer = new XMLSerializer();
+  const updatedXml = serializer.serializeToString(xmlDoc);
+  zip.file("word/document.xml", updatedXml);
+}
 
   const serializer = new XMLSerializer();
   zip.file("word/document.xml", serializer.serializeToString(xmlDoc));
@@ -1236,8 +1396,17 @@ export async function exportTranslatedDocx({
   fallbackTranslatedText,
   glossary,
   simplifiedExplanation,
+  learningObjectives,
+  keyConcepts,
+  commonMisconceptions,
+  teacherNotes,
+  classroomActivities,
+  differentiatedSupport,
+  extensionQuestions,
+  studentWorksheet,
   quiz,
   includeAnswerKey = false,
+  includeExplanations = false,
   includeLearningAppendix = true,
 }) {
   const JSZip = await getJSZip();
@@ -1345,8 +1514,17 @@ export async function exportTranslatedDocx({
       targetLanguage,
       glossary,
       simplifiedExplanation,
+      learningObjectives,
+      keyConcepts,
+      commonMisconceptions,
+      teacherNotes,
+      classroomActivities,
+      differentiatedSupport,
+      extensionQuestions,
+      studentWorksheet,
       quiz,
       includeAnswerKey,
+      includeExplanations,
     });
   }
 

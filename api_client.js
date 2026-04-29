@@ -25,8 +25,20 @@ function assertValidChatRequestBody(requestBody) {
   if (!Array.isArray(requestBody.messages)) {
     throw new Error("Invalid chat request body: messages must be an array");
   }
+  if (requestBody.messages.length === 0) {
+    throw new Error("Invalid chat request body: messages array cannot be empty");
+  }
+  for (let i = 0; i < requestBody.messages.length; i++) {
+    const msg = requestBody.messages[i];
+    if (!msg || typeof msg !== "object" || !msg.role || !msg.content) {
+      throw new Error(`Invalid chat request body: message at index ${i} must have role and content fields`);
+    }
+  }
   if (!requestBody.format || typeof requestBody.format !== "string") {
     throw new Error("Invalid chat request body: missing or invalid format field");
+  }
+  if (!requestBody.options || typeof requestBody.options !== "object" || Array.isArray(requestBody.options)) {
+    throw new Error("Invalid chat request body: options must be an object");
   }
 }
 

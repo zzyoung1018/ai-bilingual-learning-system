@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "https://esm.sh/react@18.2.0";
 import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
 import htm from "https://esm.sh/htm@3.1.1";
-import { exportLessonToPdf } from "./pdf_tools.js";
 import {
   buildLessonPackage,
   exportLessonPackageJson,
@@ -1337,19 +1336,13 @@ function TeacherWorkspace(props) {
       html`
         <div className="teacherActions">
           <button className="ghostBtn" onClick=${onExportDocx}>
-            ${t.exportTranslatedDocxRecommended}
+            ${t.exportFullLessonDocx}
           </button>
           <button className="ghostBtn" onClick=${onExportTeacherJson}>
             ${t.exportLearningPackageTeacherJson}
           </button>
           <button className="ghostBtn" onClick=${onExportStudentJson}>
             ${t.exportLearningPackageStudentJson}
-          </button>
-          <button className="ghostBtn" onClick=${onExportTeacherPdf}>
-            ${t.exportTeacherHandoutPdf}
-          </button>
-          <button className="ghostBtn" onClick=${onExportStudentPdf}>
-            ${t.exportStudentHandoutPdf}
           </button>
           <button className="ghostBtn" onClick=${onExportDebugReport}>
             ${t.exportDebugReport}
@@ -2369,32 +2362,6 @@ function App() {
     setStatusMessage(t.studentJsonExported);
   }
 
-  async function exportTeacherPdf() {
-    const pkg = buildPackage("teacher");
-    if (!pkg) return;
-    try {
-      await exportLessonToPdf(pkg, { includeAnswerKey: true, audienceLabel: "Teacher" });
-      setStatusType("info");
-      setStatusMessage(t.teacherPdfExported);
-    } catch (err) {
-      setStatusType("error");
-      setStatusMessage(err?.message || t.pdfExportFailed);
-    }
-  }
-
-  async function exportStudentPdf() {
-    const pkg = buildPackage("student");
-    if (!pkg) return;
-    try {
-      await exportLessonToPdf(pkg, { includeAnswerKey: false, audienceLabel: "Student" });
-      setStatusType("info");
-      setStatusMessage(t.studentPdfExported);
-    } catch (err) {
-      setStatusType("error");
-      setStatusMessage(err?.message || t.pdfExportFailed);
-    }
-  }
-
   async function exportDocx() {
     if (!teacherLesson) return;
     try {
@@ -2408,11 +2375,20 @@ function App() {
         fallbackTranslatedText: teacherLesson.translation || sourceText,
         glossary: teacherLesson.glossary || [],
         simplifiedExplanation: teacherLesson.simplifiedExplanation || "",
+        learningObjectives: teacherLesson.learningObjectives || [],
+        keyConcepts: teacherLesson.keyConcepts || [],
+        commonMisconceptions: teacherLesson.commonMisconceptions || [],
+        teacherNotes: teacherLesson.teacherNotes || "",
+        classroomActivities: teacherLesson.classroomActivities || [],
+        differentiatedSupport: teacherLesson.differentiatedSupport || {},
+        extensionQuestions: teacherLesson.extensionQuestions || [],
+        studentWorksheet: teacherLesson.studentWorksheet || [],
         quiz: teacherLesson.quiz || [],
         includeAnswerKey: Boolean(quizSettings.includeAnswerKey),
+        includeExplanations: Boolean(quizSettings.includeExplanations),
       });
       setStatusType("info");
-      setStatusMessage(t.translatedDocxExported);
+      setStatusMessage(t.fullLessonDocxExported);
     } catch (err) {
       setStatusType("error");
       setStatusMessage(err?.message || t.docxExportFailed);

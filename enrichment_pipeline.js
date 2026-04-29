@@ -578,9 +578,13 @@ function buildTeachingSupportContext({
 function getEnrichmentLanguageInstruction(targetLanguage) {
   if (targetLanguage === "Kazakh") {
     return (
-      "Use natural Kazakh in Cyrillic script for explanations, quiz questions, and answers. " +
+      "Use natural educational Kazakh in Cyrillic script. " +
+      "Write in clear classroom language suitable for teachers and students. " +
+      "Avoid Russian-influenced phrasing and literal word-for-word translations. " +
+      "Use natural Kazakh sentence structures and educational terminology. " +
       "Do not write Russian. Do not use Kazakh Latin script. " +
-      'Glossary terms may preserve the English source term alongside the Kazakh term, using the pattern "source term / Kazakh term" when useful.'
+      "For well-known English proper nouns, use common Kazakh transliteration with English in parentheses when useful. " +
+      'Glossary terms may preserve the English source term alongside the Kazakh term, using the pattern "source term / Kazakh term" when helpful.'
     );
   }
   if (targetLanguage === "Russian") {
@@ -869,7 +873,10 @@ function buildCompactRichLessonEnrichmentMessages({
         role: "system",
         content:
           "Return ONLY strict JSON for a complete Kazakh teaching-support package. No markdown. No translation field. " +
-          "Use natural Kazakh Cyrillic. Do not write Russian. Do not use Latin-script Kazakh. Preserve English technical terms in parentheses when useful. " +
+          "Use natural educational Kazakh in Cyrillic script. Write in clear classroom language suitable for teachers and students. " +
+          "Avoid Russian-influenced phrasing and literal word-for-word translations. Use natural Kazakh sentence structures and educational terminology. " +
+          "Do not write Russian. Do not use Latin-script Kazakh. " +
+          "For well-known English proper nouns, use common Kazakh transliteration with English in parentheses when useful. " +
           titleWarning +
           "Use source and translation excerpts as the source of truth. Do not generate quiz, glossary, objectives, examples, or worksheet tasks from title-only topics. Do not return the full translation. " +
           "Return every schema field: lessonTitle, glossary, simplifiedExplanation, quiz, learningObjectives, keyConcepts, commonMisconceptions, teacherNotes, classroomActivities, differentiatedSupport, extensionQuestions, studentWorksheet, meta. " +
@@ -956,6 +963,12 @@ function parseEnrichmentJsonPayload(content) {
 function formatEnrichmentFailureReason(err) {
   if (isEmptyModelOutputError(err)) return getRuntimeUiText().aiEmptyResponse;
   return String(err?.message || getRuntimeUiText().lessonSupportFailed).trim();
+}
+
+function logEnrichmentRecovery(label, err) {
+  if (typeof console !== "undefined" && console.info) {
+    console.info(`[AI enrichment] ${label}`, err);
+  }
 }
 
 function warnEnrichmentParseFailure(label, err) {
@@ -1459,7 +1472,7 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
     failureReason = formatEnrichmentFailureReason(err);
     enrichmentFirstAttemptEmpty = isEmptyModelOutputError(err);
     enrichmentFirstAttemptInvalid = !enrichmentFirstAttemptEmpty;
-    warnEnrichmentParseFailure("initial output could not be parsed; trying compact-complete retry.", err);
+    logEnrichmentRecovery("initial output could not be parsed; trying compact-complete retry.", err);
     enrichmentRetryAttempted = true;
   }
 
@@ -1480,9 +1493,9 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
       if (isGenerationCancelledError(retryErr)) throw retryErr;
       malformedContent = retryErr?.enrichmentContent || malformedContent;
       failureReason = formatEnrichmentFailureReason(retryErr);
-      warnEnrichmentParseFailure("complete rich retry output could not be parsed; trying JSON repair.", retryErr);
-      if (typeof console !== "undefined") {
-        console.warn("[AI enrichment] JSON repair retry is being used.");
+      logEnrichmentRecovery("complete rich retry output could not be parsed; trying JSON repair.", retryErr);
+      if (typeof console !== "undefined" && console.info) {
+        console.info("[AI enrichment] JSON repair retry is being used.");
       }
       if (malformedContent) {
         try {
@@ -1501,7 +1514,7 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
         } catch (repairErr) {
           if (isGenerationCancelledError(repairErr)) throw repairErr;
           failureReason = formatEnrichmentFailureReason(repairErr);
-          warnEnrichmentParseFailure("rich JSON repair failed; trying minimal fallback.", repairErr);
+          logEnrichmentRecovery("rich JSON repair failed; trying minimal fallback.", repairErr);
         }
       }
     }
@@ -1535,7 +1548,10 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
     }
   }
 
-  if (getMissingCoreEnrichmentFields(parsed).length > 0 && !minimalFallbackUsed) {
+  const missingCoreFields = getMissingCoreEnrichmentFields(parsed);
+  const shouldRetryForMissingCore = missingCoreFields.length > 0 && !minimalFallbackUsed;
+
+  if (shouldRetryForMissingCore) {
     enrichmentRetryAttempted = true;
     enrichmentCompactCompleteRetryAttempted = true;
     try {
@@ -1568,10 +1584,12 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
     buildNormalizedSupportPreview(parsed, fallbackInput, translation)
   );
 
-  if (
+  const shouldAttemptMissingFieldCompletion =
+    !shouldRetryForMissingCore &&
     !supportCompletenessResult.supportCompletenessPassed &&
-    supportCompletenessResult.missingCompletionFields.length > 0
-  ) {
+    supportCompletenessResult.missingCompletionFields.length > 0;
+
+  if (shouldAttemptMissingFieldCompletion) {
     supportMissingFieldCompletionAttempted = true;
     supportMissingFieldCompletionFields = supportCompletenessResult.missingCompletionFields;
     enrichmentRetryAttempted = true;
@@ -1600,7 +1618,7 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
     } catch (completionErr) {
       if (isGenerationCancelledError(completionErr)) throw completionErr;
       failureReason = formatEnrichmentFailureReason(completionErr);
-      warnEnrichmentParseFailure("missing-field support completion failed.", completionErr);
+      logEnrichmentRecovery("missing-field support completion failed.", completionErr);
     }
   }
 
@@ -1618,7 +1636,7 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
       enrichmentCompactCompleteRetryAttempted = true;
       kazakhValidationRetryAttempted = true;
       failureReason = `kazakh_validation_failed:${kazakhValidationResult.reasons.join(",")}`;
-      warnEnrichmentParseFailure("Kazakh support validation failed; trying compact-complete retry.", {
+      logEnrichmentRecovery("Kazakh support validation failed; trying compact-complete retry.", {
         reasons: kazakhValidationResult.reasons,
       });
       try {
@@ -1705,7 +1723,7 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
     } catch (completionErr) {
       if (isGenerationCancelledError(completionErr)) throw completionErr;
       failureReason = formatEnrichmentFailureReason(completionErr);
-      warnEnrichmentParseFailure("post-compact missing-field support completion failed.", completionErr);
+      logEnrichmentRecovery("post-compact missing-field support completion failed.", completionErr);
     }
   }
   if (supportMissingFieldCompletionAttempted) {
@@ -1884,13 +1902,19 @@ export function getGeneratedSupportFieldSummary(lessonLike) {
   };
   SUPPORT_FIELD_NAMES.forEach((field) => {
     const value = lessonLike?.[field];
-    const hasValue = Array.isArray(value)
-      ? value.length > 0
-      : value && typeof value === "object"
-      ? Object.values(value).some(Boolean)
-      : Boolean(String(value || "").trim());
-    if (hasValue) result.generatedSupportFields.push(field);
-    else result.missingOptionalSupportFields.push(field);
+    let hasValue = false;
+    if (Array.isArray(value)) {
+      hasValue = value.length > 0;
+    } else if (value && typeof value === "object") {
+      hasValue = Object.values(value).some((item) => Boolean(String(item || "").trim()));
+    } else {
+      hasValue = Boolean(String(value || "").trim());
+    }
+    if (hasValue) {
+      result.generatedSupportFields.push(field);
+    } else {
+      result.missingOptionalSupportFields.push(field);
+    }
   });
   return result;
 }

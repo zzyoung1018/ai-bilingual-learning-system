@@ -117,12 +117,11 @@ export const UI_TEXT = {
     progressComplete: "Complete",
     generationCancelled: "Generation cancelled.",
     translationCacheCleared: "Translation cache cleared.",
-    exportTranslatedDocxRecommended: "Export Translated DOCX (Recommended)",
+    exportFullLessonDocx: "Export Full Lesson DOCX (Recommended)",
     exportLearningPackageTeacherJson: "Export Learning Package (Teacher JSON)",
     exportLearningPackageStudentJson: "Export Learning Package (Student JSON)",
-    exportTeacherHandoutPdf: "Export Teacher Handout (PDF)",
-    exportStudentHandoutPdf: "Export Student Handout (PDF)",
     exportDebugReport: "Export Debug Report",
+    fullLessonDocxExported: "Full lesson DOCX exported successfully.",
     debugReportExported: "Debug report exported.",
     studentLearningWorkspace: "Student Learning Workspace",
     studentWorkspaceDescription:
@@ -375,14 +374,13 @@ export const UI_TEXT = {
     progressComplete: "Аяқталды",
     generationCancelled: "Генерация тоқтатылды.",
     translationCacheCleared: "Аударма кэші тазартылды.",
-    exportTranslatedDocxRecommended: "Аударылған DOCX файлын экспорттау (ұсынылады)",
+    exportFullLessonDocx: "Толық сабақ DOCX файлын экспорттау (ұсынылады)",
     exportLearningPackageTeacherJson:
       "Сабақ пакетін экспорттау (мұғалім JSON)",
     exportLearningPackageStudentJson:
       "Сабақ пакетін экспорттау (оқушы JSON)",
-    exportTeacherHandoutPdf: "Мұғалімге арналған материалды экспорттау (PDF)",
-    exportStudentHandoutPdf: "Оқушыға арналған материалды экспорттау (PDF)",
     exportDebugReport: "Тексеру есебін экспорттау",
+    fullLessonDocxExported: "Толық сабақ DOCX файлы сәтті экспортталды.",
     debugReportExported: "Тексеру есебі экспортталды.",
     studentLearningWorkspace: "Оқушының оқу жұмыс аймағы",
     studentWorkspaceDescription:

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test Enrichment API</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        button { padding: 10px 20px; margin: 10px 0; font-size: 16px; }
+        pre { background: #f5f5f5; padding: 15px; border: 1px solid #ddd; overflow-x: auto; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Test Enrichment API Contract</h1>
+    <button onclick="testValidRequest()">Test Valid Request</button>
+    <button onclick="testInvalidRequest()">Test Invalid Request (no stage)</button>
+    <button onclick="testEmptyMessages()">Test Empty Messages</button>
+    <pre id="output">Click a button to test...</pre>
+
+    <script type="module">
+        import { postModelChat } from './api_client.js';
+
+        window.testValidRequest = async function() {
+            const output = document.getElementById('output');
+            output.textContent = 'Testing valid request...\n';
+
+            try {
+                const requestBody = {
+                    stage: "enrichment",
+                    messages: [
+                        { role: "system", content: "Return JSON only." },
+                        { role: "user", content: "Return {\"test\": \"hello\"}" }
+                    ],
+                    format: "json",
+                    options: { temperature: 0.7, max_tokens: 50 }
+                };
+
+                output.textContent += '\nRequest:\n' + JSON.stringify(requestBody, null, 2) + '\n\n';
+
+                const response = await postModelChat(requestBody);
+                output.textContent += 'Response status: ' + response.status + '\n';
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    output.innerHTML += '<span class="error">Error: ' + errorText + '</span>\n';
+                    return;
+                }
+
+                const data = await response.json();
+                output.innerHTML += '<span class="success">Success!</span>\n';
+                output.textContent += 'Response:\n' + JSON.stringify(data, null, 2) + '\n';
+                output.textContent += '\nContent type: ' + typeof data.content + '\n';
+                output.textContent += 'Content value: ' + data.content + '\n';
+            } catch (err) {
+                output.innerHTML += '<span class="error">Exception: ' + err.message + '</span>\n';
+                console.error(err);
+            }
+        };
+
+        window.testInvalidRequest = async function() {
+            const output = document.getElementById('output');
+            output.textContent = 'Testing invalid request (missing stage)...\n';
+
+            try {
+                const requestBody = {
+                    messages: [
+                        { role: "system", content: "Test" },
+                        { role: "user", content: "Test" }
+                    ],
+                    format: "json",
+                    options: {}
+                };
+
+                output.textContent += '\nRequest:\n' + JSON.stringify(requestBody, null, 2) + '\n\n';
+
+                const response = await postModelChat(requestBody);
+                output.textContent += 'Should not reach here!\n';
+            } catch (err) {
+                output.innerHTML += '<span class="success">Correctly caught validation error:</span>\n';
+                output.textContent += err.message + '\n';
+            }
+        };
+
+        window.testEmptyMessages = async function() {
+            const output = document.getElementById('output');
+            output.textContent = 'Testing empty messages array...\n';
+
+            try {
+                const requestBody = {
+                    stage: "enrichment",
+                    messages: [],
+                    format: "json",
+                    options: {}
+                };
+
+                output.textContent += '\nRequest:\n' + JSON.stringify(requestBody, null, 2) + '\n\n';
+
+                const response = await postModelChat(requestBody);
+                output.textContent += 'Should not reach here!\n';
+            } catch (err) {
+                output.innerHTML += '<span class="success">Correctly caught validation error:</span>\n';
+                output.textContent += err.message + '\n';
+            }
+        };
+    </script>
+</body>
+</html>
