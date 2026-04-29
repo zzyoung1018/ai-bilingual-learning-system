@@ -14,8 +14,8 @@ import {
 const PIPELINE_VERSION = "phase-5c-removed-fields-v1";
 const TRANSLATION_PROMPT_VERSION = "stage-a-block-translation-v2";
 const CACHE_VERSION = "translation-cache-v3";
-const ENRICHMENT_PROMPT_VERSION = "stage-b-8-fields-v1";
-const ENRICHMENT_QUALITY_VERSION = "phase-5c-8-fields-v1";
+export const ENRICHMENT_PROMPT_VERSION = "stage-b-8-fields-v1";
+export const ENRICHMENT_QUALITY_VERSION = "phase-5c-8-fields-v1";
 
 const defaultQuizSettings = {
   questionCount: 4,
