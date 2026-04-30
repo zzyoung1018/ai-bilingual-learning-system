@@ -90,6 +90,268 @@ function normalizeText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+function getDocxSupportLabels(targetLanguage) {
+  const english = {
+    learningSupportAppendix: "Learning Support Appendix",
+    lesson: "Lesson",
+    targetLanguage: "Target Language",
+    glossary: "Glossary",
+    simplifiedExplanation: "Simplified Explanation",
+    keyConcepts: "Key Concepts",
+    commonMisconceptions: "Common Misconceptions",
+    teacherNotes: "Teacher Notes",
+    classroomActivities: "Classroom Activities",
+    extensionQuestions: "Extension Questions",
+    quiz: "Practice Quiz",
+    answer: "Answer",
+    explanation: "Explanation",
+    duration: "Duration",
+    instructions: "Instructions",
+    misconception: "Misconception",
+    correction: "Correction",
+    activity: "Activity",
+  };
+
+  if (targetLanguage === "Kazakh") {
+    return {
+      ...english,
+      learningSupportAppendix: "Оқу қолдауы қосымшасы",
+      lesson: "Сабақ",
+      targetLanguage: "Мақсатты тіл",
+      glossary: "Глоссарий",
+      simplifiedExplanation: "Қарапайым түсіндірме",
+      keyConcepts: "Негізгі ұғымдар",
+      commonMisconceptions: "Жиі кездесетін қате түсініктер",
+      teacherNotes: "Мұғалімге арналған ескертпелер",
+      classroomActivities: "Сыныптағы әрекеттер",
+      extensionQuestions: "Кеңейту сұрақтары",
+      quiz: "Тест",
+      answer: "Жауап",
+      explanation: "Түсіндірме",
+      duration: "Ұзақтығы",
+      instructions: "Нұсқаулық",
+      misconception: "Қате түсінік",
+      correction: "Түзету",
+      activity: "Әрекет",
+    };
+  }
+
+  if (targetLanguage === "Russian") {
+    return {
+      ...english,
+      learningSupportAppendix: "Приложение учебной поддержки",
+      lesson: "Урок",
+      targetLanguage: "Целевой язык",
+      glossary: "Глоссарий",
+      simplifiedExplanation: "Упрощенное объяснение",
+      keyConcepts: "Ключевые понятия",
+      commonMisconceptions: "Распространенные заблуждения",
+      teacherNotes: "Заметки для учителя",
+      classroomActivities: "Классные задания",
+      extensionQuestions: "Вопросы для расширения",
+      quiz: "Тест",
+      answer: "Ответ",
+      explanation: "Объяснение",
+      duration: "Продолжительность",
+      instructions: "Инструкции",
+      misconception: "Заблуждение",
+      correction: "Исправление",
+      activity: "Задание",
+    };
+  }
+
+  if (targetLanguage === "Chinese") {
+    return {
+      ...english,
+      learningSupportAppendix: "学习支持附录",
+      lesson: "课程",
+      targetLanguage: "目标语言",
+      glossary: "术语表",
+      simplifiedExplanation: "简明解释",
+      keyConcepts: "关键概念",
+      commonMisconceptions: "常见误解",
+      teacherNotes: "教师备注",
+      classroomActivities: "课堂活动",
+      extensionQuestions: "拓展问题",
+      quiz: "测验",
+      answer: "答案",
+      explanation: "解释",
+      duration: "时长",
+      instructions: "说明",
+      misconception: "误解",
+      correction: "纠正",
+      activity: "活动",
+    };
+  }
+
+  return english;
+}
+
+function hasSupportContent(value) {
+  if (Array.isArray(value)) return value.some((item) => hasSupportContent(item));
+  if (value && typeof value === "object") {
+    return Object.values(value).some((item) => hasSupportContent(item));
+  }
+  return Boolean(normalizeText(value));
+}
+
+function asSupportList(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") {
+    return value
+      .split(/\n+/)
+      .map((item) => normalizeText(item))
+      .filter(Boolean);
+  }
+  return hasSupportContent(value) ? [value] : [];
+}
+
+function buildPlainSupportAppendixLines({
+  lessonTitle,
+  targetLanguage,
+  glossary,
+  simplifiedExplanation,
+  keyConcepts,
+  commonMisconceptions,
+  teacherNotes,
+  classroomActivities,
+  extensionQuestions,
+  quiz,
+  includeAnswerKey,
+  includeExplanations,
+}) {
+  const labels = getDocxSupportLabels(targetLanguage);
+  const lines = [
+    "",
+    labels.learningSupportAppendix,
+    `${labels.lesson}: ${lessonTitle || "Untitled"}`,
+    `${labels.targetLanguage}: ${targetLanguage || "N/A"}`,
+    "",
+  ];
+
+  function section(number, title, render) {
+    lines.push(`${number}. ${title}`);
+    render();
+    lines.push("");
+  }
+
+  if (hasSupportContent(glossary)) {
+    section(1, labels.glossary, () => {
+      asSupportList(glossary).forEach((item) => {
+        if (typeof item === "string") {
+          lines.push(`• ${normalizeText(item)}`);
+          return;
+        }
+        const term = normalizeText(item?.term || item?.title || "");
+        const explanation = normalizeText(item?.explanation || item?.definition || "");
+        lines.push(`• ${term && explanation ? `${term}: ${explanation}` : term || explanation}`);
+      });
+    });
+  }
+
+  if (hasSupportContent(simplifiedExplanation)) {
+    section(2, labels.simplifiedExplanation, () => {
+      asSupportList(simplifiedExplanation).forEach((item) => lines.push(normalizeText(item)));
+    });
+  }
+
+  if (hasSupportContent(keyConcepts)) {
+    section(3, labels.keyConcepts, () => {
+      asSupportList(keyConcepts).forEach((item) => {
+        if (typeof item === "string") {
+          lines.push(`• ${normalizeText(item)}`);
+          return;
+        }
+        const title = normalizeText(item?.title || item?.term || "");
+        const explanation = normalizeText(item?.explanation || item?.description || "");
+        lines.push(`• ${title}${explanation ? `: ${explanation}` : ""}`);
+      });
+    });
+  }
+
+  if (hasSupportContent(commonMisconceptions)) {
+    section(4, labels.commonMisconceptions, () => {
+      asSupportList(commonMisconceptions).forEach((item) => {
+        if (typeof item === "string") {
+          lines.push(`• ${normalizeText(item)}`);
+          return;
+        }
+        const misconception = normalizeText(item?.misconception || item?.title || "");
+        const correction = normalizeText(item?.correction || item?.explanation || "");
+        if (misconception) lines.push(`${labels.misconception}: ${misconception}`);
+        if (correction) lines.push(`${labels.correction}: ${correction}`);
+      });
+    });
+  }
+
+  if (hasSupportContent(teacherNotes)) {
+    section(5, labels.teacherNotes, () => {
+      asSupportList(teacherNotes).forEach((item) => lines.push(`• ${normalizeText(item)}`));
+    });
+  }
+
+  if (hasSupportContent(classroomActivities)) {
+    section(6, labels.classroomActivities, () => {
+      asSupportList(classroomActivities).forEach((activity, idx) => {
+        if (typeof activity === "string") {
+          lines.push(`${labels.activity} ${idx + 1}: ${normalizeText(activity)}`);
+          return;
+        }
+        lines.push(`${labels.activity} ${idx + 1}: ${normalizeText(activity?.title || "")}`);
+        if (activity?.duration) lines.push(`${labels.duration}: ${normalizeText(activity.duration)}`);
+        if (activity?.instructions || activity?.description) {
+          lines.push(`${labels.instructions}: ${normalizeText(activity.instructions || activity.description)}`);
+        }
+      });
+    });
+  }
+
+  if (hasSupportContent(extensionQuestions)) {
+    section(7, labels.extensionQuestions, () => {
+      asSupportList(extensionQuestions).forEach((question, idx) => {
+        const text =
+          typeof question === "string"
+            ? question
+            : question?.question || Object.values(question || {}).join(" ");
+        lines.push(`${idx + 1}. ${normalizeText(text)}`);
+      });
+    });
+  }
+
+  if (hasSupportContent(quiz)) {
+    section(8, labels.quiz, () => {
+      asSupportList(quiz).forEach((q, idx) => {
+        if (typeof q === "string") {
+          lines.push(`${idx + 1}. ${normalizeText(q)}`);
+          return;
+        }
+        lines.push(`${idx + 1}. ${normalizeText(q.question)}`);
+        if (Array.isArray(q.options)) {
+          q.options.forEach((option, optionIdx) => {
+            lines.push(`${String.fromCharCode(65 + optionIdx)}. ${normalizeText(option)}`);
+          });
+        }
+        if (includeAnswerKey) {
+          const answer =
+            q.type === "short_answer"
+              ? normalizeText(q.answerText || q.answer || "")
+              : normalizeText(
+                  Array.isArray(q.options) && Number.isInteger(q.answerIndex)
+                    ? q.options[q.answerIndex]
+                    : q.answerText || q.answer || ""
+                );
+          if (answer) lines.push(`${labels.answer}: ${answer}`);
+        }
+        if (includeExplanations && q.explanation) {
+          lines.push(`${labels.explanation}: ${normalizeText(q.explanation)}`);
+        }
+      });
+    });
+  }
+
+  return lines.filter((line, index, all) => line || all[index - 1] !== "");
+}
+
 function hasEnglishWords(value) {
   return /\b[A-Za-z]{3,}\b/.test(String(value || ""));
 }
@@ -1192,138 +1454,157 @@ async function appendLearningSupportSection({
     return p;
   }
 
-  // Page break and title
-  body.appendChild(createParagraph(""));
-  body.appendChild(createParagraph(""));
-  body.appendChild(createParagraph("Teaching Support", true, true));
-  body.appendChild(createParagraph(`Lesson: ${lessonTitle || "Untitled"}`));
-  body.appendChild(createParagraph(`Target Language: ${targetLanguage || "N/A"}`));
-  body.appendChild(createParagraph(""));
+  const labels = getDocxSupportLabels(targetLanguage);
 
-  // 1. Glossary
-  if (Array.isArray(glossary) && glossary.length > 0) {
-    body.appendChild(createParagraph("1. Glossary", true));
-    glossary.forEach((item) => {
-      body.appendChild(
-        createParagraph(`   • ${normalizeText(item.term)}: ${normalizeText(item.explanation)}`)
-      );
-    });
+  function appendSection(number, title, renderContent) {
+    body.appendChild(createParagraph(`${number}. ${title}`, true));
+    renderContent();
     body.appendChild(createParagraph(""));
   }
 
-  // 2. Simplified Explanation
-  if (simplifiedExplanation) {
-    body.appendChild(createParagraph("2. Simplified Explanation", true));
-    const paragraphs = String(simplifiedExplanation).split(/\n+/);
-    paragraphs.forEach((para) => {
-      if (para.trim()) {
-        body.appendChild(createParagraph(`   ${para.trim()}`));
+  function appendTextParagraphs(value, prefix = "   ") {
+    asSupportList(value).forEach((item) => {
+      if (typeof item === "string") {
+        body.appendChild(createParagraph(`${prefix}${item}`));
+      } else if (hasSupportContent(item)) {
+        body.appendChild(createParagraph(`${prefix}${normalizeText(Object.values(item).join(" "))}`));
       }
     });
-    body.appendChild(createParagraph(""));
   }
 
-  // 3. Key Concepts
-  if (Array.isArray(keyConcepts) && keyConcepts.length > 0) {
-    body.appendChild(createParagraph("3. Key Concepts", true));
-    keyConcepts.forEach((concept) => {
-      body.appendChild(createParagraph(`   • ${normalizeText(concept.title || "")}`));
-      if (concept.explanation) {
-        body.appendChild(createParagraph(`     ${normalizeText(concept.explanation)}`));
-      }
-    });
-    body.appendChild(createParagraph(""));
+  function appendBullet(text, prefix = "   • ") {
+    const value = normalizeText(text);
+    if (value) body.appendChild(createParagraph(`${prefix}${value}`));
   }
 
-  // 4. Common Misconceptions
-  if (Array.isArray(commonMisconceptions) && commonMisconceptions.length > 0) {
-    body.appendChild(createParagraph("4. Common Misconceptions", true));
-    commonMisconceptions.forEach((item) => {
-      body.appendChild(createParagraph(`   Misconception: ${normalizeText(item.misconception || "")}`));
-      body.appendChild(createParagraph(`   Correction: ${normalizeText(item.correction || "")}`));
-      body.appendChild(createParagraph(""));
-    });
+  function appendLabeledLine(label, value, prefix = "   ") {
+    const text = normalizeText(value);
+    if (text) body.appendChild(createParagraph(`${prefix}${label}: ${text}`));
   }
 
-  // 5. Teacher Notes
-  if (teacherNotes) {
-    body.appendChild(createParagraph("5. Teacher Notes", true));
-    if (Array.isArray(teacherNotes)) {
-      teacherNotes.forEach((note) => {
-        body.appendChild(createParagraph(`   • ${normalizeText(note)}`));
-      });
-    } else {
-      const paragraphs = String(teacherNotes).split(/\n+/);
-      paragraphs.forEach((para) => {
-        if (para.trim()) {
-          body.appendChild(createParagraph(`   ${para.trim()}`));
+  body.appendChild(createParagraph(""));
+  body.appendChild(createParagraph(""));
+  body.appendChild(createParagraph(labels.learningSupportAppendix, true, true));
+  body.appendChild(createParagraph(`${labels.lesson}: ${lessonTitle || "Untitled"}`));
+  body.appendChild(createParagraph(`${labels.targetLanguage}: ${targetLanguage || "N/A"}`));
+  body.appendChild(createParagraph(""));
+
+  if (hasSupportContent(glossary)) {
+    appendSection(1, labels.glossary, () => {
+      asSupportList(glossary).forEach((item) => {
+        if (typeof item === "string") {
+          appendBullet(item);
+          return;
         }
+        const term = normalizeText(item?.term || item?.title || "");
+        const explanation = normalizeText(item?.explanation || item?.definition || "");
+        appendBullet(term && explanation ? `${term}: ${explanation}` : term || explanation);
       });
-    }
-    body.appendChild(createParagraph(""));
-  }
-
-  // 6. Classroom Activities
-  if (Array.isArray(classroomActivities) && classroomActivities.length > 0) {
-    body.appendChild(createParagraph("6. Classroom Activities", true));
-    classroomActivities.forEach((activity, idx) => {
-      body.appendChild(createParagraph(`   Activity ${idx + 1}: ${normalizeText(activity.title || "")}`));
-      if (activity.duration) {
-        body.appendChild(createParagraph(`   Duration: ${normalizeText(activity.duration)}`));
-      }
-      if (activity.instructions) {
-        body.appendChild(createParagraph(`   Instructions: ${normalizeText(activity.instructions)}`));
-      }
-      body.appendChild(createParagraph(""));
     });
   }
 
-  // 7. Extension Questions
-  if (Array.isArray(extensionQuestions) && extensionQuestions.length > 0) {
-    body.appendChild(createParagraph("7. Extension Questions", true));
-    extensionQuestions.forEach((question, idx) => {
-      body.appendChild(createParagraph(`   ${idx + 1}. ${normalizeText(question)}`));
+  if (hasSupportContent(simplifiedExplanation)) {
+    appendSection(2, labels.simplifiedExplanation, () => {
+      appendTextParagraphs(simplifiedExplanation);
     });
-    body.appendChild(createParagraph(""));
   }
 
-  // 8. Practice Quiz
-  if (Array.isArray(quiz) && quiz.length > 0) {
-    body.appendChild(createParagraph("8. Practice Quiz", true));
-    quiz.forEach((q, idx) => {
-      body.appendChild(createParagraph(`${idx + 1}. ${normalizeText(q.question)}`));
-
-      if (q.type === "multiple_choice" && Array.isArray(q.options)) {
-        q.options.forEach((option, optionIdx) => {
-          const letter = String.fromCharCode(65 + optionIdx);
-          body.appendChild(createParagraph(`   ${letter}. ${normalizeText(option)}`));
-        });
-      } else if (q.type === "true_false" && Array.isArray(q.options)) {
-        q.options.forEach((option, optionIdx) => {
-          const letter = String.fromCharCode(65 + optionIdx);
-          body.appendChild(createParagraph(`   ${letter}. ${normalizeText(option)}`));
-        });
-      }
-
-      if (includeAnswerKey) {
-        const answer =
-          q.type === "short_answer"
-            ? normalizeText(q.answerText || "")
-            : normalizeText(
-                Array.isArray(q.options) && Number.isInteger(q.answerIndex)
-                  ? q.options[q.answerIndex]
-                  : ""
-              );
-        if (answer) {
-          body.appendChild(createParagraph(`   Answer: ${answer}`, true));
+  if (hasSupportContent(keyConcepts)) {
+    appendSection(3, labels.keyConcepts, () => {
+      asSupportList(keyConcepts).forEach((concept) => {
+        if (typeof concept === "string") {
+          appendBullet(concept);
+          return;
         }
-      }
+        appendBullet(concept?.title || concept?.term || "");
+        appendBullet(concept?.explanation || concept?.description || "", "     ");
+      });
+    });
+  }
 
-      if (includeExplanations && q.explanation) {
-        body.appendChild(createParagraph(`   Explanation: ${normalizeText(q.explanation)}`));
-      }
+  if (hasSupportContent(commonMisconceptions)) {
+    appendSection(4, labels.commonMisconceptions, () => {
+      asSupportList(commonMisconceptions).forEach((item) => {
+        if (typeof item === "string") {
+          appendBullet(item);
+          return;
+        }
+        appendLabeledLine(labels.misconception, item?.misconception || item?.title || "");
+        appendLabeledLine(labels.correction, item?.correction || item?.explanation || "");
+        body.appendChild(createParagraph(""));
+      });
+    });
+  }
 
-      body.appendChild(createParagraph(""));
+  if (hasSupportContent(teacherNotes)) {
+    appendSection(5, labels.teacherNotes, () => {
+      appendTextParagraphs(teacherNotes, "   • ");
+    });
+  }
+
+  if (hasSupportContent(classroomActivities)) {
+    appendSection(6, labels.classroomActivities, () => {
+      asSupportList(classroomActivities).forEach((activity, idx) => {
+        if (typeof activity === "string") {
+          body.appendChild(createParagraph(`   ${labels.activity} ${idx + 1}: ${activity}`));
+          return;
+        }
+        body.appendChild(
+          createParagraph(`   ${labels.activity} ${idx + 1}: ${normalizeText(activity?.title || "")}`)
+        );
+        appendLabeledLine(labels.duration, activity?.duration || "");
+        appendLabeledLine(labels.instructions, activity?.instructions || activity?.description || "");
+        body.appendChild(createParagraph(""));
+      });
+    });
+  }
+
+  if (hasSupportContent(extensionQuestions)) {
+    appendSection(7, labels.extensionQuestions, () => {
+      asSupportList(extensionQuestions).forEach((question, idx) => {
+        if (typeof question === "string") {
+          appendBullet(`${idx + 1}. ${question}`, "   ");
+          return;
+        }
+        appendBullet(`${idx + 1}. ${normalizeText(question?.question || Object.values(question).join(" "))}`, "   ");
+      });
+    });
+  }
+
+  if (hasSupportContent(quiz)) {
+    appendSection(8, labels.quiz, () => {
+      asSupportList(quiz).forEach((q, idx) => {
+        if (typeof q === "string") {
+          body.appendChild(createParagraph(`${idx + 1}. ${normalizeText(q)}`));
+          return;
+        }
+        body.appendChild(createParagraph(`${idx + 1}. ${normalizeText(q.question)}`));
+
+        if (Array.isArray(q.options)) {
+          q.options.forEach((option, optionIdx) => {
+            const letter = String.fromCharCode(65 + optionIdx);
+            body.appendChild(createParagraph(`   ${letter}. ${normalizeText(option)}`));
+          });
+        }
+
+        if (includeAnswerKey) {
+          const answer =
+            q.type === "short_answer"
+              ? normalizeText(q.answerText || q.answer || "")
+              : normalizeText(
+                  Array.isArray(q.options) && Number.isInteger(q.answerIndex)
+                    ? q.options[q.answerIndex]
+                    : q.answerText || q.answer || ""
+                );
+          appendLabeledLine(labels.answer, answer);
+        }
+
+        if (includeExplanations && q.explanation) {
+          appendLabeledLine(labels.explanation, q.explanation);
+        }
+
+        body.appendChild(createParagraph(""));
+      });
     });
   }
 
@@ -1347,8 +1628,9 @@ export async function exportTranslatedDocx({
   classroomActivities,
   extensionQuestions,
   quiz,
-  includeAnswerKey = false,
-  includeExplanations = false,
+  quizSettings = null,
+  includeAnswerKey = null,
+  includeExplanations = null,
   includeLearningAppendix = true,
 }) {
   const JSZip = await getJSZip();
@@ -1356,12 +1638,31 @@ export async function exportTranslatedDocx({
     throw new Error("DOCX export is unavailable right now.");
   }
 
+  const resolvedIncludeAnswerKey = Boolean(includeAnswerKey ?? quizSettings?.includeAnswerKey);
+  const resolvedIncludeExplanations = Boolean(includeExplanations ?? quizSettings?.includeExplanations);
+
   if (!docxData || !docxData.arrayBuffer || !Array.isArray(docxData.translationBlocks)) {
     // Fallback path for robustness: create a simple new docx if source docx context is missing.
     const docx = await getDocxLib();
     if (!docx || typeof docx.Document !== "function") {
       throw new Error("DOCX export is unavailable right now.");
     }
+    const appendixLines = includeLearningAppendix
+      ? buildPlainSupportAppendixLines({
+          lessonTitle,
+          targetLanguage,
+          glossary,
+          simplifiedExplanation,
+          keyConcepts,
+          commonMisconceptions,
+          teacherNotes,
+          classroomActivities,
+          extensionQuestions,
+          quiz,
+          includeAnswerKey: resolvedIncludeAnswerKey,
+          includeExplanations: resolvedIncludeExplanations,
+        })
+      : [];
     const document = new docx.Document({
       sections: [
         {
@@ -1373,6 +1674,12 @@ export async function exportTranslatedDocx({
             new docx.Paragraph({
               text: normalizeText(fallbackTranslatedText || ""),
             }),
+            ...appendixLines.map(
+              (line) =>
+                new docx.Paragraph({
+                  text: normalizeText(line),
+                })
+            ),
           ],
         },
       ],
@@ -1462,8 +1769,8 @@ export async function exportTranslatedDocx({
       classroomActivities,
       extensionQuestions,
       quiz,
-      includeAnswerKey,
-      includeExplanations,
+      includeAnswerKey: resolvedIncludeAnswerKey,
+      includeExplanations: resolvedIncludeExplanations,
     });
   }
 

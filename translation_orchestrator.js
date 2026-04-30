@@ -35,6 +35,7 @@ const MODEL_TRANSLATION_OPTIONS = {
 const PLAIN_TEXT_TRANSLATION_CHUNK_MAX_CHARS = 1800;
 const DOCUMENT_FATAL_FALLBACK_RATIO = 0.2;
 const DOCUMENT_MIN_TRANSLATED_RATIO = 0.25;
+const TRANSLATION_REQUEST_TIMEOUT_MS = 120000;
 
 export const DOCX_TRANSLATION_BATCH_MAX_BLOCKS = 10;
 export const DOCX_TRANSLATION_BATCH_MAX_CHARS = 2400;
@@ -51,6 +52,17 @@ export function createGenerationCancelledError() {
 
 export function isGenerationCancelledError(err) {
   return err?.name === "GenerationCancelledError" || err?.name === "AbortError";
+}
+
+function createTranslationTimeoutError(timeoutMs) {
+  const err = new Error(`Translation request timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+  err.name = "TranslationRequestTimeoutError";
+  err.code = "translation_request_timeout";
+  return err;
+}
+
+function isTranslationTimeoutError(err) {
+  return err?.name === "TranslationRequestTimeoutError" || err?.code === "translation_request_timeout";
 }
 
 export function throwIfGenerationCancelled(runContext) {
@@ -437,7 +449,7 @@ function extractJsonPayload(content, uiText) {
   }
 }
 
-async function callModelChat(messages, { stage, options, format, signal }, uiText) {
+async function callModelChat(messages, { stage, options, format, signal, timeoutMs = TRANSLATION_REQUEST_TIMEOUT_MS }, uiText) {
   throwIfGenerationCancelled({ signal });
   const requestBody = {
     stage,
@@ -445,14 +457,34 @@ async function callModelChat(messages, { stage, options, format, signal }, uiTex
     format: format === "json" ? "json" : "text",
     options,
   };
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = globalThis.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const abortFromParent = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) {
+      globalThis.clearTimeout(timeoutId);
+      throw createGenerationCancelledError();
+    }
+    signal.addEventListener("abort", abortFromParent, { once: true });
+  }
   let response;
   try {
-    response = await postModelChat(requestBody, { signal });
+    response = await postModelChat(requestBody, { signal: controller.signal });
   } catch (err) {
+    if (timedOut) {
+      throw createTranslationTimeoutError(timeoutMs);
+    }
     if (isGenerationCancelledError(err)) {
       throw createGenerationCancelledError();
     }
     throw new Error(uiText.aiConnectionFailed(err?.message || ""));
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+    if (signal) signal.removeEventListener("abort", abortFromParent);
   }
 
   if (!response.ok) {
@@ -1184,6 +1216,7 @@ export async function translateBlocksForDocument({
       });
     } catch (initialErr) {
       if (isGenerationCancelledError(initialErr)) throw initialErr;
+      if (isTranslationTimeoutError(initialErr)) throw initialErr;
       forceRetryAll = true;
       result = {
         translationsById: { ...plan.translationsById },
@@ -1339,6 +1372,7 @@ export async function translateBlocksForDocument({
         );
       } catch (retryErr) {
         if (isGenerationCancelledError(retryErr)) throw retryErr;
+        if (isTranslationTimeoutError(retryErr)) throw retryErr;
         const classification = classifyTranslationBlock(block.text, targetLanguage, block);
         result.translationsById[block.id] = block.text;
         result.meta.retrySummary.preservedAfterRetry += 1;
@@ -1446,6 +1480,8 @@ export async function translateDocxBlocksInBatches({
   let preservedAfterRetry = 0;
   let retriedBlocks = 0;
   let failedBlocks = 0;
+  const translationBatchDurationsMs = [];
+  let translationBatchApiCallCount = 0;
 
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
     if (assertActiveRun) assertActiveRun(runContext);
@@ -1472,7 +1508,16 @@ export async function translateDocxBlocksInBatches({
       );
     }
 
+    const batchStartedAt = Date.now();
+    let batchDurationRecorded = false;
+    function recordBatchDuration() {
+      if (batchDurationRecorded) return;
+      translationBatchDurationsMs[batchIndex] = Date.now() - batchStartedAt;
+      batchDurationRecorded = true;
+    }
+
     try {
+      translationBatchApiCallCount += 1;
       const batchResult = await translateBlocksForDocument({
         blocks: batchBlocks,
         targetLanguage,
@@ -1482,6 +1527,7 @@ export async function translateDocxBlocksInBatches({
         uiText,
         progressCallbacks: {}, // Don't pass progress callbacks for nested calls
       });
+      recordBatchDuration();
       batch.items.forEach((item) => {
         const translated = String(
           batchResult.translationsById?.[item.block.id] || item.block.text || ""
@@ -1528,7 +1574,9 @@ export async function translateDocxBlocksInBatches({
       }
       preservedAfterRetry += Number(batchResult.meta?.retrySummary?.preservedAfterRetry || 0);
     } catch (batchErr) {
+      recordBatchDuration();
       if (isGenerationCancelledError(batchErr)) throw batchErr;
+      if (isTranslationTimeoutError(batchErr)) throw batchErr;
       partialTranslationWarning = true;
       aggregatedReasons.push(
         uiText.docxBatchFailedReason(
@@ -1621,6 +1669,7 @@ export async function translateDocxBlocksInBatches({
           preservedAfterRetry += Number(singleResult.meta?.retrySummary?.preservedAfterRetry || 0);
         } catch (singleErr) {
           if (isGenerationCancelledError(singleErr)) throw singleErr;
+          if (isTranslationTimeoutError(singleErr)) throw singleErr;
           failedBlocks += 1;
           preservedAfterRetry += 1;
           translationsById[item.block.id] = item.block.text;
@@ -1675,6 +1724,14 @@ export async function translateDocxBlocksInBatches({
   });
   usedFallback = usedFallback || thresholdInfo.triggered;
   partialTranslationWarning = partialTranslationWarning || (preservedAfterRetry > 0 && !usedFallback);
+  const translationSlowestBatchDurationMs = translationBatchDurationsMs.reduce(
+    (max, duration) => Math.max(max, Number(duration || 0)),
+    0
+  );
+  const translationSlowestBatchIndex =
+    translationSlowestBatchDurationMs > 0
+      ? translationBatchDurationsMs.findIndex((duration) => duration === translationSlowestBatchDurationMs) + 1
+      : 0;
 
   const meta = {
     usedFallback,
@@ -1689,11 +1746,19 @@ export async function translateDocxBlocksInBatches({
     partialTranslationWarning,
     documentFallbackThreshold: thresholdInfo,
     documentFallbackThresholdTriggered: thresholdInfo.triggered,
+    translationBatchDurationsMs,
+    translationBatchApiCallCount,
+    translationSlowestBatchIndex,
+    translationSlowestBatchDurationMs,
     batchSummary: {
       totalBatches: batches.length,
       retriedBlocks,
       failedBlocks,
       preservedAfterRetry,
+      translationBatchDurationsMs,
+      translationBatchApiCallCount,
+      translationSlowestBatchIndex,
+      translationSlowestBatchDurationMs,
       maxBlocksPerBatch: DOCX_TRANSLATION_BATCH_MAX_BLOCKS,
       maxCharsPerBatch: DOCX_TRANSLATION_BATCH_MAX_CHARS,
       shortBlockMaxChars: DOCX_TRANSLATION_SHORT_BLOCK_MAX_CHARS,

@@ -290,6 +290,7 @@ export function createSafeEnrichmentFallbackLesson(
     compactCompleteRetryAttempted = false,
     minimalFallbackAttempted = false,
     kazakhValidationReasons = [],
+    kazakhLatinValidation = null,
     enrichmentApiCallCount = 0,
     stageBEnrichmentDurationMs = 0,
   } = {},
@@ -361,6 +362,7 @@ export function createSafeEnrichmentFallbackLesson(
       kazakhValidationPassed: fallbackInput.targetLanguage === "Kazakh" ? false : true,
       kazakhLanguageValidationPassed: fallbackInput.targetLanguage === "Kazakh" ? false : true,
       kazakhValidationReasons: Array.isArray(kazakhValidationReasons) ? kazakhValidationReasons : [],
+      kazakhLatinValidation: kazakhLatinValidation || null,
       lessonTitleWasUserProvided: Boolean(fallbackInput.lessonTitleWasUserProvided),
       lessonTitleDerivedFromFile: Boolean(fallbackInput.lessonTitleDerivedFromFile),
       lessonTitleUsedForGeneration: titleGrounding.lessonTitleUsedForGeneration,
@@ -1095,6 +1097,130 @@ function getRussianWordHitCount(text) {
   return words.filter((word) => COMMON_RUSSIAN_WORDS.has(word)).length;
 }
 
+function normalizeLatinToken(token) {
+  return String(token || "")
+    .replace(/[’]/g, "'")
+    .replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, "")
+    .toLowerCase();
+}
+
+function extractLatinTokens(text) {
+  return String(text || "").match(/[A-Za-z][A-Za-z0-9'’._/-]*/g) || [];
+}
+
+function buildAllowedLatinTokenSet(lessonLike) {
+  const sourceTokens = extractLatinTokens(
+    `${lessonLike?.sourceText || ""}\n${lessonLike?.lessonTitle || ""}`
+  );
+  const allowed = new Set();
+  sourceTokens.forEach((token) => {
+    const normalized = normalizeLatinToken(token);
+    if (normalized) allowed.add(normalized);
+    String(token || "")
+      .split(/[-/_.]/)
+      .map((part) => normalizeLatinToken(part))
+      .filter(Boolean)
+      .forEach((part) => allowed.add(part));
+  });
+  return allowed;
+}
+
+function isAllowedLatinSupportToken(token, sourceTokenSet) {
+  const raw = String(token || "").trim();
+  const normalized = normalizeLatinToken(raw);
+  if (!normalized) return true;
+  if (sourceTokenSet.has(normalized)) return true;
+  if (/^https?:\/\//i.test(raw) || /^www\./i.test(raw)) return true;
+  if (/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(raw)) return true;
+  if (/^[A-D]$/i.test(raw)) return true;
+  if (/^[A-Z][A-Z0-9&.-]{1,12}$/.test(raw)) return true;
+  if (/^[A-Za-z]:[\\/]/.test(raw) || /[\\/][A-Za-z0-9_.-]+/.test(raw)) return true;
+  if (/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*(?:\([^)]*\))?$/.test(raw)) {
+    return /[_().]/.test(raw);
+  }
+  if (/[=+*/^<>[\]{}]/.test(raw) && /[A-Za-z0-9]/.test(raw)) return true;
+  return false;
+}
+
+function looksLikeLatinKazakhToken(token) {
+  const value = normalizeLatinToken(token);
+  if (value.length < 4) return false;
+  return /(?:q|w|ng|gh|sh|ch|zh|ya|yu|kh|ı|ń|ǵ|á|ó|ú)/i.test(value);
+}
+
+function analyzeKazakhLatinUsage(segments, lessonLike) {
+  const sourceTokenSet = buildAllowedLatinTokenSet(lessonLike);
+  const allowed = new Set();
+  const suspicious = new Set();
+  let totalLatinTokenCount = 0;
+  let suspiciousLatinTokenCount = 0;
+  let longMostlyLatinSegmentCount = 0;
+  let transliteratedKazakhLikeSegmentCount = 0;
+
+  segments.forEach((segment) => {
+    const tokens = extractLatinTokens(segment.text);
+    if (tokens.length === 0) return;
+    const stats = getScriptStats(segment.text);
+    let segmentSuspiciousCount = 0;
+    let segmentKazakhLikeCount = 0;
+
+    tokens.forEach((token) => {
+      const normalized = normalizeLatinToken(token);
+      if (!normalized) return;
+      totalLatinTokenCount += 1;
+      if (isAllowedLatinSupportToken(token, sourceTokenSet)) {
+        allowed.add(token);
+        return;
+      }
+      suspicious.add(token);
+      suspiciousLatinTokenCount += 1;
+      segmentSuspiciousCount += 1;
+      if (looksLikeLatinKazakhToken(token)) {
+        segmentKazakhLikeCount += 1;
+      }
+    });
+
+    const segmentSuspiciousRatio = segmentSuspiciousCount / Math.max(1, tokens.length);
+    if (
+      tokens.length >= 6 &&
+      stats.latinRatio > 0.55 &&
+      stats.cyrillicRatio < 0.45 &&
+      segmentSuspiciousRatio > 0.5
+    ) {
+      longMostlyLatinSegmentCount += 1;
+    }
+    if (
+      segmentKazakhLikeCount >= 4 &&
+      stats.latinRatio > 0.4 &&
+      segmentSuspiciousRatio > 0.35
+    ) {
+      transliteratedKazakhLikeSegmentCount += 1;
+    }
+  });
+
+  const latinTokenRatio = suspiciousLatinTokenCount / Math.max(1, totalLatinTokenCount);
+  const failed =
+    totalLatinTokenCount >= 6 &&
+    (longMostlyLatinSegmentCount > 0 ||
+      transliteratedKazakhLikeSegmentCount > 0 ||
+      (latinTokenRatio > 0.65 && suspiciousLatinTokenCount >= 8));
+
+  return {
+    suspiciousLatinTokens: Array.from(suspicious).slice(0, 30),
+    allowedLatinTokens: Array.from(allowed).slice(0, 50),
+    latinTokenRatio,
+    latinValidationDecision: failed
+      ? "fail:suspicious_latin_prose"
+      : totalLatinTokenCount > 0
+      ? "pass:allowed_or_limited_latin"
+      : "pass:no_latin",
+    totalLatinTokenCount,
+    suspiciousLatinTokenCount,
+    longMostlyLatinSegmentCount,
+    transliteratedKazakhLikeSegmentCount,
+  };
+}
+
 function getUnsupportedTitleTopicHits(lessonLike) {
   const titleGrounding = getLessonTitleGroundingInfo({
     lessonTitle: lessonLike?.lessonTitle,
@@ -1133,28 +1259,32 @@ export function validateKazakhSupportContent(lesson) {
 
   const reasons = [];
   const segments = collectSupportTextSegments(lesson);
+  const sourceTokenSet = buildAllowedLatinTokenSet(lesson);
   const proseSegments = segments.filter((segment) => {
     const stats = getScriptStats(segment.text);
+    const latinTokens = extractLatinTokens(segment.text);
+    const onlyAllowedSourceLatin =
+      latinTokens.length > 0 &&
+      stats.cyrillic === 0 &&
+      latinTokens.every((token) => isAllowedLatinSupportToken(token, sourceTokenSet));
+    if (onlyAllowedSourceLatin) return false;
     return stats.letters >= 16 && !/^(AI|GPT|API|URL|HTML|CSS|SQL|Python|JavaScript)$/i.test(segment.text);
   });
 
   let lowCyrillicCount = 0;
-  let latinKazakhLikeCount = 0;
   let russianLikeCount = 0;
   proseSegments.forEach((segment) => {
     const stats = getScriptStats(segment.text);
     if (stats.cyrillicRatio < 0.45) lowCyrillicCount += 1;
-    if (stats.latinRatio > 0.5 && /(?:q|w|ng|gh|sh|ch|zh|ya|yu|kh)/i.test(segment.text)) {
-      latinKazakhLikeCount += 1;
-    }
     const russianHits = getRussianWordHitCount(segment.text);
     if (russianHits >= 3 && stats.kazakhSpecific === 0) russianLikeCount += 1;
   });
+  const latinValidation = analyzeKazakhLatinUsage(proseSegments, lesson);
 
   if (proseSegments.length > 0 && lowCyrillicCount / proseSegments.length > 0.25) {
     reasons.push("kazakh_support_low_cyrillic_ratio");
   }
-  if (latinKazakhLikeCount > 0) {
+  if (latinValidation.latinValidationDecision.startsWith("fail")) {
     reasons.push("kazakh_support_latin_kazakh_detected");
   }
   if (russianLikeCount > 0 && russianLikeCount / Math.max(1, proseSegments.length) > 0.15) {
@@ -1171,6 +1301,7 @@ export function validateKazakhSupportContent(lesson) {
     reasons,
     titleGrounding: titleTopic,
     checkedSegmentCount: proseSegments.length,
+    latinValidation,
   };
 }
 
@@ -1606,6 +1737,7 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
       failureReason = `kazakh_validation_failed:${kazakhValidationResult.reasons.join(",")}`;
       logEnrichmentRecovery("Kazakh support validation failed; trying compact-complete retry.", {
         reasons: kazakhValidationResult.reasons,
+        latinValidation: kazakhValidationResult.latinValidation,
       });
       try {
         const retryResult = await timedRequestParsedEnrichment(
@@ -1638,6 +1770,7 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
             compactCompleteRetryAttempted: enrichmentCompactCompleteRetryAttempted,
             minimalFallbackAttempted: enrichmentMinimalFallbackAttempted,
             kazakhValidationReasons: kazakhValidationResult.reasons,
+            kazakhLatinValidation: kazakhValidationResult.latinValidation,
             enrichmentApiCallCount: metrics.apiCallCount,
             stageBEnrichmentDurationMs: Date.now() - enrichmentStartedAt,
           });
@@ -1654,6 +1787,7 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
           compactCompleteRetryAttempted: enrichmentCompactCompleteRetryAttempted,
           minimalFallbackAttempted: enrichmentMinimalFallbackAttempted,
           kazakhValidationReasons: kazakhValidationResult.reasons,
+          kazakhLatinValidation: kazakhValidationResult.latinValidation,
           enrichmentApiCallCount: metrics.apiCallCount,
           stageBEnrichmentDurationMs: Date.now() - enrichmentStartedAt,
         });
@@ -1773,6 +1907,7 @@ export async function generateTeachingSupportWithModel(fallbackInput, translatio
       kazakhLanguageValidationPassed:
         fallbackInput.targetLanguage === "Kazakh" ? Boolean(kazakhValidationResult.valid) : true,
       kazakhValidationReasons: kazakhValidationResult.reasons || [],
+      kazakhLatinValidation: kazakhValidationResult.latinValidation || null,
       kazakhValidationRetryAttempted,
       lessonTitleWasUserProvided: Boolean(fallbackInput.lessonTitleWasUserProvided),
       lessonTitleDerivedFromFile: Boolean(fallbackInput.lessonTitleDerivedFromFile),

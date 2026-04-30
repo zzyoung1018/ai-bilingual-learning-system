@@ -122,6 +122,7 @@ const MODEL_TRANSLATION_OPTIONS = {
 const PLAIN_TEXT_TRANSLATION_CHUNK_MAX_CHARS = 1800;
 const DOCUMENT_FATAL_FALLBACK_RATIO = 0.2;
 const DOCUMENT_MIN_TRANSLATED_RATIO = 0.25;
+const ENRICHMENT_REQUEST_TIMEOUT_MS = 180000;
 
 
 const validPages = new Set(navItems.map((item) => item.id));
@@ -589,6 +590,25 @@ function buildDebugReport({
       ),
       totalGenerationDurationMs: Number(teacherMeta?.totalGenerationDurationMs || 0),
       stageATranslationDurationMs: Number(translationMeta.stageATranslationDurationMs || 0),
+      translationBatchDurationsMs:
+        translationMeta.translationBatchDurationsMs ||
+        translationMeta.batchSummary?.translationBatchDurationsMs ||
+        [],
+      translationBatchApiCallCount: Number(
+        translationMeta.translationBatchApiCallCount ??
+          translationMeta.batchSummary?.translationBatchApiCallCount ??
+          0
+      ),
+      translationSlowestBatchIndex: Number(
+        translationMeta.translationSlowestBatchIndex ??
+          translationMeta.batchSummary?.translationSlowestBatchIndex ??
+          0
+      ),
+      translationSlowestBatchDurationMs: Number(
+        translationMeta.translationSlowestBatchDurationMs ??
+          translationMeta.batchSummary?.translationSlowestBatchDurationMs ??
+          0
+      ),
       stageBEnrichmentDurationMs: Number(
         enrichmentMeta.stageBEnrichmentDurationMs || lesson?.meta?.stageBEnrichmentDurationMs || 0
       ),
@@ -614,6 +634,8 @@ function buildDebugReport({
       ),
       kazakhValidationReasons:
         enrichmentMeta.kazakhValidationReasons || lesson?.meta?.kazakhValidationReasons || [],
+      kazakhLatinValidation:
+        enrichmentMeta.kazakhLatinValidation || lesson?.meta?.kazakhLatinValidation || null,
       lessonTitleWasUserProvided: Boolean(
         enrichmentMeta.lessonTitleWasUserProvided ?? lesson?.meta?.lessonTitleWasUserProvided
       ),
@@ -1582,6 +1604,10 @@ function App() {
     }
   }
 
+  function isTranslationTimeoutError(err) {
+    return err?.name === "TranslationRequestTimeoutError" || err?.code === "translation_request_timeout";
+  }
+
   async function callModelChatForEnrichment(messages, options = {}) {
     const requestBody = {
       stage: options.stage || "enrichment",
@@ -1591,14 +1617,34 @@ function App() {
     };
 
     throwIfGenerationCancelled({ signal: options.signal });
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeoutId = globalThis.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, ENRICHMENT_REQUEST_TIMEOUT_MS);
+    const abortFromParent = () => controller.abort();
+    if (options.signal) {
+      if (options.signal.aborted) {
+        globalThis.clearTimeout(timeoutId);
+        throw createGenerationCancelledError();
+      }
+      options.signal.addEventListener("abort", abortFromParent, { once: true });
+    }
     let response;
     try {
-      response = await postModelChat(requestBody, { signal: options.signal });
+      response = await postModelChat(requestBody, { signal: controller.signal });
     } catch (err) {
+      if (timedOut) {
+        throw new Error("Enrichment request timed out after 180 seconds.");
+      }
       if (isGenerationCancelledError(err)) {
         throw createGenerationCancelledError();
       }
       throw new Error(t.aiConnectionFailed(err?.message || ""));
+    } finally {
+      globalThis.clearTimeout(timeoutId);
+      if (options.signal) options.signal.removeEventListener("abort", abortFromParent);
     }
 
     if (!response.ok) {
@@ -2039,6 +2085,13 @@ function App() {
           }
           return;
         }
+        if (isTranslationTimeoutError(docxErr)) {
+          if (isActiveGenerationRun(runContext)) {
+            setGenerationStatus("error", docxErr?.message || t.docxBlockFailure, runContext);
+            markGenerationProgressError(runContext);
+          }
+          return;
+        }
         const fallback = createLocalFallbackLesson(fallbackInput, buildEnrichmentRunContext(runContext));
         if (!isActiveGenerationRun(runContext)) return;
         setTeacherLesson({
@@ -2230,6 +2283,13 @@ function App() {
         }
         return;
       }
+      if (isTranslationTimeoutError(err)) {
+        if (isActiveGenerationRun(runContext)) {
+          setGenerationStatus("error", err?.message || t.docxBlockFailure, runContext);
+          markGenerationProgressError(runContext);
+        }
+        return;
+      }
       const fallback = createLocalFallbackLesson(fallbackInput, buildEnrichmentRunContext(runContext));
       if (!isActiveGenerationRun(runContext)) return;
       setTeacherLesson({
@@ -2324,8 +2384,9 @@ function App() {
         classroomActivities: teacherLesson.classroomActivities || [],
         extensionQuestions: teacherLesson.extensionQuestions || [],
         quiz: teacherLesson.quiz || [],
-        includeAnswerKey: Boolean(quizSettings.includeAnswerKey),
-        includeExplanations: Boolean(quizSettings.includeExplanations),
+        quizSettings: teacherLesson.quizSettings || quizSettings,
+        includeAnswerKey: Boolean((teacherLesson.quizSettings || quizSettings).includeAnswerKey),
+        includeExplanations: Boolean((teacherLesson.quizSettings || quizSettings).includeExplanations),
       });
       setStatusType("info");
       setStatusMessage(t.fullLessonDocxExported);
