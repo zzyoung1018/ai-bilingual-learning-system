@@ -6,7 +6,23 @@ An AI-supported bilingual education demo for preparing classroom lesson material
 
 - Use DOCX upload for the most stable structured-document workflow.
 - PDF upload is supported by converting the PDF to DOCX first through the backend, then using the DOCX pipeline.
-- After generation, export the translated DOCX, teacher/student JSON packages, optional PDF handouts, and the debug report.
+- After generation, export the Full Lesson DOCX, teacher/student JSON packages, and the debug report.
+- PDF handout output has been removed. PDF is supported as an input format only through backend PDF-to-DOCX conversion.
+
+## Teaching Support Fields
+
+The active teaching support sections are:
+
+- glossary
+- simplifiedExplanation
+- keyConcepts
+- commonMisconceptions
+- teacherNotes
+- classroomActivities
+- extensionQuestions
+- quiz
+
+Full Lesson DOCX export includes the translated lesson text plus these active teaching support sections.
 
 ## Local Run Instructions
 
@@ -83,4 +99,3 @@ Frontend demo:
 - PPT-style PDFs may convert poorly through `pdf2docx`.
 - The frontend currently loads some dependencies from `esm.sh`.
 - Large documents may be slow because translation and support generation are model-driven.
-

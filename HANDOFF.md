@@ -132,11 +132,7 @@ import {
   ACTIVE_SUPPORT_FIELDS,
   CRITICAL_SUPPORT_FIELDS,
   OPTIONAL_SUPPORT_FIELDS,
-  REMOVED_SUPPORT_FIELDS,
   isActiveSupportField,
-  isCriticalSupportField,
-  isOptionalSupportField,
-  isRemovedSupportField,
 } from "./support_fields.js";
 ```
 
@@ -189,10 +185,12 @@ import {
    ```
 
 3. `getSupportCompletenessIssues()` - Updated teacher minimums
-   - Removed: differentiatedSupport, studentWorksheet from teacherMinimums
-   - Removed: validation checks for differentiatedSupport and studentWorksheet
+   - Critical minimums are based on CRITICAL_SUPPORT_FIELDS only
+   - Optional active fields are based on OPTIONAL_SUPPORT_FIELDS only
+   - Removed: validation checks for learningObjectives, differentiatedSupport, and studentWorksheet
 
 4. `getSupportIncompleteFields()` - Removed checks
+   - Removed: learningObjectives incomplete check
    - Removed: studentWorksheet incomplete check
    - Removed: differentiatedSupport incomplete check
 
@@ -306,17 +304,27 @@ FastAPI backend. It provides:
 3. **Updated `app.js`** - UI and export
    - Removed 3 UI sections from LessonSupportSections
    - Removed 3 fields from DOCX export call
+   - Removed 3 fields from new teacher/student JSON package export
    - Removed PDF handout export buttons and functions
 
 4. **Updated `docx_tools.js`** - DOCX export
    - Removed 3 parameters from exportTranslatedDocx
    - Removed 3 parameters from appendLearningSupportSection
    - Removed 3 sections from DOCX output
+   - Removed stale differentiatedSupport appendix fragment that caused browser-module syntax failure
    - Renumbered remaining sections 1-8
 
 5. **Fixed import/export regression**
    - Restored `export` keyword to ENRICHMENT_PROMPT_VERSION
    - Restored `export` keyword to ENRICHMENT_QUALITY_VERSION
+
+6. **Updated `lesson_package.js`** - JSON package export
+   - New teacher/student JSON packages export only the 8 active fields
+   - Old imported packages with removed fields remain accepted and ignored by active UI/export paths
+
+7. **Updated `README.md`**
+   - Removed outdated PDF handout export language
+   - Documented PDF input conversion and the 8 active teaching support fields
 
 **What was NOT changed:**
 - Stage A translation logic

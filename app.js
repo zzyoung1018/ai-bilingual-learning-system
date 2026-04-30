@@ -786,42 +786,6 @@ function ActivitiesSection({ title, items, t, emptyText }) {
   `;
 }
 
-function DifferentiatedSupportSection({ title, support, t, emptyText }) {
-  const value = support || {};
-  const hasContent = Object.values(value).some(Boolean);
-  return html`
-    <article className="resultCard">
-      <h3>${title}</h3>
-      ${!hasContent && html`<${EmptySupportMessage} text=${emptyText} />`}
-      ${value.strugglingLearners &&
-      html`<p><strong>${t.strugglingLearners}:</strong> ${value.strugglingLearners}</p>`}
-      ${value.advancedLearners &&
-      html`<p><strong>${t.advancedLearners}:</strong> ${value.advancedLearners}</p>`}
-      ${value.languageSupport &&
-      html`<p><strong>${t.languageSupport}:</strong> ${value.languageSupport}</p>`}
-    </article>
-  `;
-}
-
-function WorksheetSection({ title, items, emptyText }) {
-  const list = Array.isArray(items) ? items : [];
-  return html`
-    <article className="resultCard">
-      <h3>${title}</h3>
-      ${list.length === 0
-        ? html`<${EmptySupportMessage} text=${emptyText} />`
-        : list.map(
-            (item, index) => html`
-              <div className="supportItem" key=${`${title}-${index}`}>
-                <strong>${item.taskTitle}</strong>
-                <p>${item.instructions}</p>
-              </div>
-            `
-          )}
-    </article>
-  `;
-}
-
 function TeacherNotesSection({ title, notes, emptyText }) {
   const list = Array.isArray(notes) ? notes.filter(Boolean) : [];
   const text = !Array.isArray(notes) ? String(notes || "").trim() : "";
@@ -2308,14 +2272,11 @@ function App() {
       translation: teacherLesson.translation,
       glossary: teacherLesson.glossary,
       simplifiedExplanation: teacherLesson.simplifiedExplanation,
-      learningObjectives: teacherLesson.learningObjectives,
       keyConcepts: teacherLesson.keyConcepts,
       commonMisconceptions: teacherLesson.commonMisconceptions,
       teacherNotes: teacherLesson.teacherNotes,
       classroomActivities: teacherLesson.classroomActivities,
-      differentiatedSupport: teacherLesson.differentiatedSupport,
       extensionQuestions: teacherLesson.extensionQuestions,
-      studentWorksheet: teacherLesson.studentWorksheet,
       quizSettings: teacherLesson.quizSettings || quizSettings,
       quiz: teacherLesson.quiz,
       mode: teacherLesson.mode || mode,

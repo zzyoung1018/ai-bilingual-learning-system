@@ -30,14 +30,11 @@ export function buildLessonPackage({
   translation,
   glossary,
   simplifiedExplanation,
-  learningObjectives,
   keyConcepts,
   commonMisconceptions,
   teacherNotes,
   classroomActivities,
-  differentiatedSupport,
   extensionQuestions,
-  studentWorksheet,
   quizSettings,
   quiz,
   mode,
@@ -57,7 +54,6 @@ export function buildLessonPackage({
     translation: translation || "",
     glossary: Array.isArray(glossary) ? glossary : [],
     simplifiedExplanation: simplifiedExplanation || "",
-    learningObjectives: Array.isArray(learningObjectives) ? learningObjectives : [],
     keyConcepts: Array.isArray(keyConcepts) ? keyConcepts : [],
     quizSettings: quizSettings || {},
     quiz: Array.isArray(quiz) ? quiz : [],
@@ -84,7 +80,6 @@ export function buildLessonPackage({
     return {
       ...base,
       extensionQuestions: Array.isArray(extensionQuestions) ? extensionQuestions : [],
-      studentWorksheet: Array.isArray(studentWorksheet) ? studentWorksheet : [],
       displayOptions: {
         showAnswerKey: false,
         showAnswerExplanations: false,
@@ -97,12 +92,7 @@ export function buildLessonPackage({
     commonMisconceptions: Array.isArray(commonMisconceptions) ? commonMisconceptions : [],
     teacherNotes: Array.isArray(teacherNotes) || typeof teacherNotes === "string" ? teacherNotes : "",
     classroomActivities: Array.isArray(classroomActivities) ? classroomActivities : [],
-    differentiatedSupport:
-      differentiatedSupport && typeof differentiatedSupport === "object" && !Array.isArray(differentiatedSupport)
-        ? differentiatedSupport
-        : {},
     extensionQuestions: Array.isArray(extensionQuestions) ? extensionQuestions : [],
-    studentWorksheet: Array.isArray(studentWorksheet) ? studentWorksheet : [],
     displayOptions: {
       showAnswerKey: true,
       showAnswerExplanations: Boolean(quizSettings?.includeExplanations),

@@ -4,11 +4,7 @@ import {
   ACTIVE_SUPPORT_FIELDS,
   CRITICAL_SUPPORT_FIELDS,
   OPTIONAL_SUPPORT_FIELDS,
-  REMOVED_SUPPORT_FIELDS,
   isActiveSupportField,
-  isCriticalSupportField,
-  isOptionalSupportField,
-  isRemovedSupportField,
 } from "./support_fields.js";
 
 const PIPELINE_VERSION = "phase-5c-removed-fields-v1";
@@ -997,15 +993,7 @@ function hasSupportValue(value) {
 }
 
 function getIncompleteRichSupportFields(parsed) {
-  const requiredFields = [
-    "commonMisconceptions",
-    "teacherNotes",
-    "classroomActivities",
-    "differentiatedSupport",
-    "extensionQuestions",
-    "studentWorksheet",
-  ];
-  return requiredFields.filter((field) => !hasSupportValue(parsed?.[field]));
+  return OPTIONAL_SUPPORT_FIELDS.filter((field) => !hasSupportValue(parsed?.[field]));
 }
 
 function getMissingCoreEnrichmentFields(parsed) {
@@ -1027,15 +1015,6 @@ function mergeEnrichmentPayloads(primary, supplemental) {
       result[field] = supplemental[field];
     }
   });
-  const primarySupport = result.differentiatedSupport || {};
-  const supplementalSupport = supplemental.differentiatedSupport || {};
-  result.differentiatedSupport = {
-    strugglingLearners:
-      primarySupport.strugglingLearners || supplementalSupport.strugglingLearners || "",
-    advancedLearners:
-      primarySupport.advancedLearners || supplementalSupport.advancedLearners || "",
-    languageSupport: primarySupport.languageSupport || supplementalSupport.languageSupport || "",
-  };
   result.meta = {
     ...(supplemental.meta || {}),
     ...(result.meta || {}),
@@ -1087,18 +1066,7 @@ function collectSupportTextSegments(lessonLike) {
     if (text) segments.push({ path, text });
   }
 
-  [
-    "simplifiedExplanation",
-    "learningObjectives",
-    "keyConcepts",
-    "commonMisconceptions",
-    "teacherNotes",
-    "classroomActivities",
-    "differentiatedSupport",
-    "extensionQuestions",
-    "studentWorksheet",
-    "quiz",
-  ].forEach((field) => add(lessonLike?.[field], field));
+  ACTIVE_SUPPORT_FIELDS.forEach((field) => add(lessonLike?.[field], field));
   add(
     (lessonLike?.glossary || []).map((item) => item?.explanation || ""),
     "glossary.explanation"
@@ -1221,7 +1189,6 @@ function buildNormalizedSupportPreview(raw, fallbackInput, translation) {
     translation,
     glossary: normalizeGlossaryItems(raw?.glossary),
     simplifiedExplanation: String(raw?.simplifiedExplanation || raw?.explanation || "").trim(),
-    learningObjectives: normalizeStringArray(raw?.learningObjectives, 5),
     keyConcepts: normalizeObjectArray(raw?.keyConcepts, ["title", "explanation"], 5),
     commonMisconceptions: normalizeObjectArray(
       raw?.commonMisconceptions,
@@ -1234,9 +1201,7 @@ function buildNormalizedSupportPreview(raw, fallbackInput, translation) {
       ["title", "duration", "instructions"],
       3
     ),
-    differentiatedSupport: normalizeDifferentiatedSupport(raw?.differentiatedSupport),
     extensionQuestions: normalizeStringArray(raw?.extensionQuestions, 4),
-    studentWorksheet: normalizeObjectArray(raw?.studentWorksheet, ["taskTitle", "instructions"], 4),
     quizSettings,
     quiz: quizGrounding.quiz,
     mode: fallbackInput.mode,
@@ -1255,18 +1220,26 @@ export function getSupportCompletenessIssues(lessonLike) {
   const incompleteFields = [];
   const incompleteFieldDetails = [];
   const addMissing = (field, kind, reason) => {
+    if (!isActiveSupportField(field)) return;
     if (kind === "critical") missingCriticalFields.push(field);
     else missingOptionalFields.push(field);
     incompleteFieldDetails.push({ field, kind: "missing", reason });
   };
   const addIncomplete = (field, details) => {
+    if (!isActiveSupportField(field)) return;
     incompleteFields.push(field);
     incompleteFieldDetails.push({ field, kind: "incomplete", details });
   };
 
-  const criticalMinimums = isKazakh
-    ? { glossary: 3, quiz: 3, learningObjectives: 2, keyConcepts: 2 }
-    : { glossary: 1, quiz: 1, learningObjectives: 1, keyConcepts: 1 };
+  const criticalMinimums = {};
+  CRITICAL_SUPPORT_FIELDS.filter((field) => field !== "simplifiedExplanation").forEach((field) => {
+    criticalMinimums[field] =
+      isKazakh && (field === "glossary" || field === "quiz")
+        ? 3
+        : isKazakh && field === "keyConcepts"
+        ? 2
+        : 1;
+  });
 
   Object.entries(criticalMinimums).forEach(([field, minimum]) => {
     if (Number(counts[field] || 0) < minimum) {
@@ -1283,12 +1256,7 @@ export function getSupportCompletenessIssues(lessonLike) {
   const keyConceptIssues = getIncompleteObjectArrayFields(lessonLike?.keyConcepts, ["title", "explanation"]);
   if (keyConceptIssues.length > 0) addIncomplete("keyConcepts", keyConceptIssues);
 
-  const teacherMinimums = {
-    commonMisconceptions: 1,
-    teacherNotes: 1,
-    classroomActivities: 1,
-    extensionQuestions: 1,
-  };
+  const teacherMinimums = Object.fromEntries(OPTIONAL_SUPPORT_FIELDS.map((field) => [field, 1]));
   if (isTeacherMode) {
     Object.entries(teacherMinimums).forEach(([field, minimum]) => {
       if (Number(counts[field] || 0) < minimum) {
@@ -1332,13 +1300,13 @@ export function validateSupportCompleteness(lessonLike) {
   const missingCompletionFields = Array.from(
     new Set([
       ...issues.missingCriticalFields,
-      ...issues.missingOptionalFields,
       ...issues.incompleteFields,
     ].filter(Boolean))
   );
 
   return {
-    supportCompletenessPassed: missingCompletionFields.length === 0,
+    supportCompletenessPassed:
+      issues.missingCriticalFields.length === 0 && issues.incompleteFields.length === 0,
     supportCompletenessReasons,
     missingCriticalSupportFields: issues.missingCriticalFields,
     missingOptionalSupportFields: issues.missingOptionalFields,
@@ -1894,15 +1862,6 @@ function normalizeTeacherNotes(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
-function normalizeDifferentiatedSupport(value) {
-  const raw = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  return {
-    strugglingLearners: String(raw.strugglingLearners || "").replace(/\s+/g, " ").trim(),
-    advancedLearners: String(raw.advancedLearners || "").replace(/\s+/g, " ").trim(),
-    languageSupport: String(raw.languageSupport || "").replace(/\s+/g, " ").trim(),
-  };
-}
-
 export function getGeneratedSupportFieldSummary(lessonLike) {
   const result = {
     generatedSupportFields: [],
@@ -2132,7 +2091,6 @@ export function normalizeLessonResult(raw, fallbackInput, fallbackTranslation = 
     normalizedQuiz.length > 0 &&
     quiz.length === 0 &&
     quizGrounding.droppedOffTopicQuizItems.length > 0;
-  const learningObjectives = normalizeStringArray(raw.learningObjectives, 5);
   const keyConcepts = normalizeObjectArray(raw.keyConcepts, ["title", "explanation"], 5);
   const commonMisconceptions = normalizeObjectArray(
     raw.commonMisconceptions,
@@ -2143,15 +2101,9 @@ export function normalizeLessonResult(raw, fallbackInput, fallbackTranslation = 
   const classroomActivities = normalizeObjectArray(
     raw.classroomActivities,
     ["title", "duration", "instructions"],
-    3
+      3
   );
-  const differentiatedSupport = normalizeDifferentiatedSupport(raw.differentiatedSupport);
   const extensionQuestions = normalizeStringArray(raw.extensionQuestions, 4);
-  const studentWorksheet = normalizeObjectArray(
-    raw.studentWorksheet,
-    ["taskTitle", "instructions"],
-    4
-  );
 
   const enrichmentUsedFallback = Boolean(raw.meta?.enrichmentUsedFallback);
   const enrichmentAttempted = Boolean(raw.meta?.enrichmentAttempted || fallbackTranslation);
@@ -2180,14 +2132,11 @@ export function normalizeLessonResult(raw, fallbackInput, fallbackTranslation = 
   const supportSummary = getGeneratedSupportFieldSummary({
     glossary,
     quiz,
-    learningObjectives,
     keyConcepts,
     commonMisconceptions,
     teacherNotes,
     classroomActivities,
-    differentiatedSupport,
     extensionQuestions,
-    studentWorksheet,
   });
   const supportCompleteness = validateSupportCompleteness({
     sourceText: fallbackInput.sourceText,
@@ -2195,14 +2144,11 @@ export function normalizeLessonResult(raw, fallbackInput, fallbackTranslation = 
     translation,
     glossary,
     simplifiedExplanation,
-    learningObjectives,
     keyConcepts,
     commonMisconceptions,
     teacherNotes,
     classroomActivities,
-    differentiatedSupport,
     extensionQuestions,
-    studentWorksheet,
     quiz,
   });
   const teachingSupportFallbackUsed = Boolean(
@@ -2226,14 +2172,11 @@ export function normalizeLessonResult(raw, fallbackInput, fallbackTranslation = 
     translation,
     glossary,
     simplifiedExplanation,
-    learningObjectives,
     keyConcepts,
     commonMisconceptions,
     teacherNotes,
     classroomActivities,
-    differentiatedSupport,
     extensionQuestions,
-    studentWorksheet,
     quizSettings,
     quiz,
     mode: fallbackInput.mode,

@@ -1279,24 +1279,6 @@ async function appendLearningSupportSection({
   }
 
   // 7. Extension Questions
-        body.appendChild(createParagraph("   Struggling Learners:", true));
-        body.appendChild(createParagraph(`   ${normalizeText(differentiatedSupport.strugglingLearners)}`));
-        body.appendChild(createParagraph(""));
-      }
-      if (differentiatedSupport.advancedLearners) {
-        body.appendChild(createParagraph("   Advanced Learners:", true));
-        body.appendChild(createParagraph(`   ${normalizeText(differentiatedSupport.advancedLearners)}`));
-        body.appendChild(createParagraph(""));
-      }
-      if (differentiatedSupport.languageSupport) {
-        body.appendChild(createParagraph("   Language Support:", true));
-        body.appendChild(createParagraph(`   ${normalizeText(differentiatedSupport.languageSupport)}`));
-        body.appendChild(createParagraph(""));
-      }
-    }
-  }
-
-  // 7. Extension Questions
   if (Array.isArray(extensionQuestions) && extensionQuestions.length > 0) {
     body.appendChild(createParagraph("7. Extension Questions", true));
     extensionQuestions.forEach((question, idx) => {
@@ -1348,10 +1330,6 @@ async function appendLearningSupportSection({
   const serializer = new XMLSerializer();
   const updatedXml = serializer.serializeToString(xmlDoc);
   zip.file("word/document.xml", updatedXml);
-}
-
-  const serializer = new XMLSerializer();
-  zip.file("word/document.xml", serializer.serializeToString(xmlDoc));
 }
 
 export async function exportTranslatedDocx({
@@ -1494,4 +1472,3 @@ export async function exportTranslatedDocx({
   const fileName = `${safeFileName(lessonTitle)}-translated.docx`;
   downloadBlob(blob, fileName);
 }
-
